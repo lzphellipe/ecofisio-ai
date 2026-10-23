@@ -21,7 +21,7 @@ jobs:
       - name: Instalar (compila o kernel C++ via scikit-build-core)
         run: pip install ".[dev]"
       - name: Lint
-        run: ruff check src tests && ruff format --check src tests
+        run: ruff check src tests scripts && ruff format --check src tests scripts
       - name: Testes
         run: pytest
 

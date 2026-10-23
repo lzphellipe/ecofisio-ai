@@ -15,8 +15,18 @@ from ecofisio.evidence.retraction import (
     RetractionWatchIndex,
     parse_crossref_work,
 )
+from ecofisio.evidence.verify import (
+    NLIVerifier,
+    SupportLabel,
+    SupportVerifier,
+    VerificationResult,
+)
 
 __all__ = [
+    "NLIVerifier",
+    "SupportLabel",
+    "SupportVerifier",
+    "VerificationResult",
     "AuditReport",
     "Citation",
     "Claim",

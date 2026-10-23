@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Artigo FICTÍCIO para testes: estrutura JATS realista, conteúdo inventado, DOI com prefixo
+     de teste 10.5555. Não citar como literatura. -->
+<!DOCTYPE article PUBLIC "-//NLM//DTD JATS (Z39.96) Journal Archiving and Interchange DTD v1.2 20190208//EN" "JATS-archivearticle1.dtd">
+<article xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:ali="http://www.niso.org/schemas/ali/1.0/" article-type="research-article">
+  <front>
+    <journal-meta>
+      <journal-title-group><journal-title>Journal of Test Plant Physiology</journal-title></journal-title-group>
+    </journal-meta>
+    <article-meta>
+      <article-id pub-id-type="pmcid">PMC0000001</article-id>
+      <article-id pub-id-type="doi">10.5555/TEST.DROUGHT.001</article-id>
+      <title-group><article-title>Drought reduces <italic>Vcmax</italic> in coffee seedlings</article-title></title-group>
+      <pub-date pub-type="epub"><year>2024</year></pub-date>
+      <permissions>
+        <license license-type="open-access" xlink:href="https://creativecommons.org/licenses/by/4.0/">
+          <license-p>This article is distributed under the terms of the Creative Commons Attribution 4.0 License.</license-p>
+        </license>
+      </permissions>
+      <abstract>
+        <p>Water deficit decreased net CO2 assimilation by 40% and the apparent maximum carboxylation rate (Vcmax) by 25% relative to well-watered plants.</p>
+      </abstract>
+      <abstract abstract-type="graphical"><p>Graphical abstract text that must be ignored.</p></abstract>
+    </article-meta>
+  </front>
+  <body>
+    <sec>
+      <title>Introduction</title>
+      <p>Stomatal closure is the first response of many species to soil drying [<xref ref-type="bibr" rid="b1">1</xref>].</p>
+      <p>Whether biochemical limitation follows remains debated.</p>
+    </sec>
+    <sec>
+      <title>Results</title>
+      <sec>
+        <title>Gas exchange</title>
+        <p>Under severe drought, stomatal conductance fell below 0.05 mol m-2 s-1. Net assimilation decreased by 40%.<fig id="f1"><caption><p>Figure caption that must not appear in text.</p></caption></fig></p>
+      </sec>
+      <sec>
+        <title>Fluorescence</title>
+        <p>Maximum quantum yield of PSII (Fv/Fm) did not differ between treatments.</p>
+      </sec>
+    </sec>
+  </body>
+</article>

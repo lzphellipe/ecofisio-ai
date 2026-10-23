@@ -12,9 +12,12 @@ Plano completo do projeto: [IA para Ecofisiologia e Bioquímica Vegetal — Plan
 | Ajuste de curvas A/Ci | Vcmax, J, Rd e TPU opcional; erro padrão, IC 95% por bootstrap, alerta de parâmetro não identificável | `src/ecofisio/physio/fvcb.py` |
 | Kernel C++ | Avaliação do FvCB em lote para muitas curvas, exposta ao Python via nanobind | `kernels/` |
 | Pipeline de dados | Camadas raw → validated → processed → analytics, esquema Pandera, limpeza sempre registrada em log | `src/ecofisio/pipeline/` |
-| Evidência | Citações com DOI, trecho e página; força da evidência; checagem de retratações | `src/ecofisio/evidence/` |
+| Evidência | Citações com DOI, trecho e localizador; força da evidência; checagem de retratações | `src/ecofisio/evidence/` |
+| Verificador semântico | NLI confere se o trecho sustenta a afirmação; bloqueia afirmações estritas não sustentadas | `src/ecofisio/evidence/verify.py` |
+| Literatura | Busca no Europe PMC, download do JATS com cache imutável, licença lida do próprio artigo | `src/ecofisio/literature/` |
+| Busca (RAG) | BM25 + embeddings opcionais com fusão RRF; cada resultado vira citação | `src/ecofisio/rag/` |
 
-Ainda não há LLM, RAG nem dashboard: entram nas próximas etapas da fase 1 e nas fases seguintes do roadmap.
+Ainda não há LLM nem dashboard: entram nas próximas etapas da fase 1 e nas fases seguintes do roadmap.
 
 ## Arquitetura do código
 
@@ -31,8 +34,11 @@ ecofisio-ai/
 ├── src/ecofisio/
 │   ├── physio/          # modelos mecanísticos (FvCB)
 │   ├── pipeline/        # camadas de dados, esquemas, limpeza com log
-│   ├── evidence/        # citações, força da evidência, retratações
+│   ├── evidence/        # citações, força da evidência, retratações, verificador NLI
+│   ├── literature/      # Europe PMC, parser JATS, montagem do corpus
+│   ├── rag/             # índice BM25 + denso, fusão RRF
 │   └── kernels.py       # fachada Python dos kernels C++
+├── scripts/             # verificações ao vivo (ex.: smoke_europepmc.py)
 ├── tests/               # pytest
 ├── data/                # raw/ validated/ processed/ analytics/ (fora do git; DVC)
 └── research/minikernel/ # trilho 2
@@ -65,6 +71,32 @@ print(fit.params.vcmax, fit.ci95["vcmax"], fit.warnings)
 ```
 
 Os valores de Vcmax e J são **aparentes** (base de Ci, condutância do mesofilo infinita). As constantes de Bernacchi et al. (2001) vêm de tabaco; para outras espécies, avalie o erro antes de comparar entre estudos.
+
+## Corpus de literatura e busca
+
+```bash
+# 1. confira a API e a sintaxe da query (este código foi testado sem rede)
+python scripts/smoke_europepmc.py --email contato@exemplo.org
+
+# 2. monte o corpus: baixa o JATS, lê a licença, indexa e registra cada artigo
+ecofisio-corpus --query '"stomatal conductance" AND drought AND OPEN_ACCESS:y' \
+    --max 200 --email contato@exemplo.org --out data/processed/literature
+```
+
+`corpus_report.jsonl` diz, para cada artigo encontrado, se entrou no índice e, se não, por quê. A licença fica em cada trecho; só CC BY e CC0 podem ir para o treino do LLM (`--licenses CC-BY,CC0` filtra já na indexação).
+
+```python
+from pathlib import Path
+
+from ecofisio.rag import LiteratureIndex
+
+idx = LiteratureIndex.load(Path("data/processed/literature"))
+for hit in idx.search("drought effect on Vcmax", k=5):
+    print(hit.passage.doi, hit.passage.section, hit.passage.text[:120])
+citation = hit.to_citation()  # DOI + trecho + seção, pronto para um Claim
+```
+
+Embeddings densos (`pip install -e ".[rag]"`, `--embedder <modelo>`) e o verificador semântico (`pip install -e ".[nli]"`, `NLIVerifier(<modelo>)`) são opcionais e não têm modelo padrão: escolha, valide num conjunto anotado e registre o nome. Sem verificador, a auditoria bloqueia afirmações citadas em vez de aprová-las.
 
 ## Princípios
 

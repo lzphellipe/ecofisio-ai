@@ -11,10 +11,13 @@ from ecofisio.evidence import (
     EvidenceStrength,
     RetractionChecker,
     RetractionWatchIndex,
+    SupportLabel,
+    VerificationResult,
     audit_claim,
     normalize_doi,
     parse_crossref_work,
 )
+from ecofisio.evidence.verify import decide, label_indices
 
 OK = "10.5555/ok.1"
 OK2 = "10.5555/ok.2"
@@ -147,10 +150,83 @@ def test_audit_blocks_retracted_and_unverified(tmp_path):
     assert report.blocked and "não verificada" in report.problems[0]
 
 
-def test_audit_passes_clean_claim_but_flags_semantic_check_pending(tmp_path):
-    report = audit_claim(
-        Claim("x", EvidenceStrength.RESULTADO_ISOLADO, EpistemicStatus.MEDIDO, [cite(OK)]),
-        RetractionChecker(index=rw_csv(tmp_path)),
-    )
-    assert not report.blocked
+def test_audit_without_verifier_blocks_unless_explicitly_waived(tmp_path):
+    claim = Claim("x", EvidenceStrength.RESULTADO_ISOLADO, EpistemicStatus.MEDIDO, [cite(OK)])
+    checker = RetractionChecker(index=rw_csv(tmp_path))
+
+    report = audit_claim(claim, checker)
+    assert report.blocked
     assert report.semantic_check.startswith("não executado")
+
+    waived = audit_claim(claim, checker, require_semantic=False)
+    assert not waived.blocked and waived.warnings
+
+
+class FakeVerifier:
+    """Rótulo fixo por DOI: testa só a regra de bloqueio, não a qualidade do NLI."""
+
+    name = "fake-nli"
+
+    def __init__(self, labels):
+        self.labels = labels
+
+    def verify(self, claim, passage):
+        lab = self.labels[passage]
+        return VerificationResult(lab, 0.9 if lab is SupportLabel.SUSTENTA else 0.1, 0.8, self.name)
+
+
+def claim_with(strength, *passages):
+    cits = [Citation(doi=f"10.5555/ok.{i}", passage=p) for i, p in enumerate(passages, 1)]
+    return Claim("Drought reduces Vcmax.", strength, EpistemicStatus.MEDIDO, cits)
+
+
+def test_strict_claim_blocked_when_a_passage_does_not_support(tmp_path):
+    checker = RetractionChecker(index=rw_csv(tmp_path))
+    v = FakeVerifier({"p1": SupportLabel.SUSTENTA, "p2": SupportLabel.NAO_SUSTENTA})
+    report = audit_claim(claim_with(EvidenceStrength.CONSENSO, "p1", "p2"), checker, v)
+    assert report.blocked
+    assert len(report.problems) == 1 and "10.5555/ok.2" in report.problems[0]
+    assert "não sustenta" in report.problems[0]
+    assert report.semantic_check == "executado (fake-nli)"
+    assert len(report.support) == 2
+
+
+def test_strict_claim_passes_when_all_passages_support(tmp_path):
+    checker = RetractionChecker(index=rw_csv(tmp_path))
+    v = FakeVerifier({"p1": SupportLabel.SUSTENTA})
+    report = audit_claim(claim_with(EvidenceStrength.RESULTADO_ISOLADO, "p1"), checker, v)
+    assert not report.blocked and not report.warnings
+
+
+def test_controversial_claim_records_contradiction_without_blocking(tmp_path):
+    checker = RetractionChecker(index=rw_csv(tmp_path))
+    v = FakeVerifier({"p1": SupportLabel.SUSTENTA, "p2": SupportLabel.CONTRADIZ})
+    report = audit_claim(claim_with(EvidenceStrength.CONTROVERSO, "p1", "p2"), checker, v)
+    assert not report.blocked
+    assert any("contradiz" in w for w in report.warnings)
+
+
+def test_label_indices_read_from_model_config():
+    assert label_indices({0: "contradiction", 1: "entailment", 2: "neutral"}) == {
+        "contradiction": 0,
+        "entailment": 1,
+        "neutral": 2,
+    }
+    assert label_indices({0: "ENTAILMENT", 1: "NOT_ENTAILMENT"}) == {
+        "entailment": 0,
+        "not_entailment": 1,
+    }
+    with pytest.raises(ValueError):
+        label_indices({0: "positive", 1: "negative"})
+
+
+@pytest.mark.parametrize(
+    ("e", "c", "expected"),
+    [
+        (0.8, 0.1, SupportLabel.SUSTENTA),
+        (0.2, 0.7, SupportLabel.CONTRADIZ),
+        (0.3, 0.3, SupportLabel.NAO_SUSTENTA),
+    ],
+)
+def test_decide_thresholds(e, c, expected):
+    assert decide(e, c, min_entailment=0.5, min_contradiction=0.5) is expected
