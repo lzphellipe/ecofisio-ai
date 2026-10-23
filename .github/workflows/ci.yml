@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    name: Python ${{ matrix.python }} (build do kernel + pytest)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Instalar (compila o kernel C++ via scikit-build-core)
+        run: pip install ".[dev]"
+      - name: Lint
+        run: ruff check src tests && ruff format --check src tests
+      - name: Testes
+        run: pytest
+
+  cpp:
+    name: Testes C++ (GoogleTest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configurar
+        run: cmake -S . -B build/cpp -DECOFISIO_BUILD_PYTHON=OFF -DECOFISIO_BUILD_CPP_TESTS=ON -DCMAKE_BUILD_TYPE=Release
+      - name: Compilar
+        run: cmake --build build/cpp -j
+      - name: Testar
+        run: ctest --test-dir build/cpp --output-on-failure

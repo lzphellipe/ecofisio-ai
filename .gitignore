@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Build
+build/
+dist/
+*.so
+*.pyd
+
+# Dados: versionados com DVC, nunca no git
+data/raw/*
+data/validated/*
+data/processed/*
+data/analytics/*
+!data/**/.gitkeep
+
+# Experimentos e modelos
+mlruns/
+wandb/
+checkpoints/
+*.safetensors
+*.gguf
+
+# Ambiente
+.env
+.DS_Store
+.vscode/
+.idea/
