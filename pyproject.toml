@@ -28,6 +28,7 @@ nli = ["transformers>=4.40", "torch>=2.2"]  # verificador semântico de citaçõ
 ecofisio-corpus = "ecofisio.literature.corpus:main"
 ecofisio-ask = "ecofisio.agent.cli:main"
 ecofisio-eval = "ecofisio.eval.cli:main"
+ecofisio-busca = "ecofisio.rag.cli:main"
 
 [tool.scikit-build]
 minimum-version = "build-system.requires"

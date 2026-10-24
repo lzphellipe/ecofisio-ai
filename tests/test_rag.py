@@ -207,3 +207,38 @@ def test_index_saved_before_article_type_still_loads(tmp_path, corpus):
     (tmp_path / "idx" / "meta.json").write_text(json.dumps(meta))
     loaded = LiteratureIndex.load(tmp_path / "idx")
     assert loaded.passages[0].article_type == "" and not loaded.passages[0].primary_evidence
+
+
+def test_busca_cli_text_json_and_primary_filter(tmp_path, capsys, corpus):
+    import json
+
+    from ecofisio.rag.cli import main
+
+    idx = LiteratureIndex()
+    for a in corpus:
+        idx.add_article(a)
+    idx.save(tmp_path / "idx")
+    base = ["--index", str(tmp_path / "idx")]
+
+    assert main(["stomatal", "conductance", "drought", *base]) == 0
+    out = capsys.readouterr().out
+    assert "doi:10.5555/test.drought.001" in out and "research-article" in out
+
+    assert main(["Rubisco nitrogen", "--json", *base]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["consulta"] == "Rubisco nitrogen" and data["resultados"][0]["posicao"] == 1
+
+    # os artigos montados à mão no fixture não têm tipo: o filtro de primários os exclui
+    assert main(["Rubisco nitrogen", "--so-primarios", "--json", *base]) == 0
+    res = json.loads(capsys.readouterr().out)["resultados"]
+    assert all(r["primary_evidence"] for r in res)
+
+    assert main(["xyzzy", *base]) == 0
+    assert "Nenhum trecho" in capsys.readouterr().out
+
+
+def test_busca_cli_missing_index(tmp_path):
+    from ecofisio.rag.cli import main
+
+    with pytest.raises(SystemExit):
+        main(["drought", "--index", str(tmp_path / "nao-existe")])

@@ -89,6 +89,12 @@ ecofisio-corpus --query-file queries/seca_trocas_gasosas.txt --max 200 --license
 
 As queries ficam em `queries/`, versionadas: a busca que gerou o corpus é reproduzível (requisito da revisão sistemática). Prefira `--query-file` a `--query` no Windows: o PowerShell remove as aspas duplas internas ao passar argumentos para programas externos.
 
+Para consultar o corpus direto, sem modelo:
+
+```powershell
+ecofisio-busca "stomatal conductance drought recovery" -k 10 --so-primarios
+```
+
 `corpus_report.jsonl` diz, para cada artigo encontrado, se entrou no índice e, se não, por quê. A licença fica em cada trecho; só CC BY e CC0 podem ir para o treino do LLM (`--licenses CC-BY,CC0` filtra já na indexação).
 
 ```python
