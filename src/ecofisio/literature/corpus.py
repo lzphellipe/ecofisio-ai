@@ -4,8 +4,12 @@ Cada artigo encontrado gera uma linha no relatório (`corpus_report.jsonl`) dize
 se não, por quê. Nada é descartado em silêncio.
 
 Uso (a query num arquivo evita problemas de aspas no PowerShell e fica versionada):
-    ecofisio-corpus --query-file queries/seca_trocas_gasosas.txt --max 200 \\
+    ecofisio-corpus --query-file queries/seca_trocas_gasosas.txt \\
+        --query-file queries/baunilha.txt --max 200 \\
         --licenses CC-BY,CC0 --email contato@exemplo.org
+
+O índice é refeito a cada execução com TODAS as queries passadas: para acrescentar um tema,
+passe também os arquivos dos temas anteriores (o que já foi baixado vem do cache).
 
 Confira a sintaxe da query no Europe PMC (scripts/smoke_europepmc.py) antes de um download grande.
 """
@@ -34,6 +38,7 @@ class CorpusEntry:
     license: str | None = None
     passages: int = 0
     training_allowed: bool = False
+    consulta: str = ""  # nome da query (arquivo) que trouxe o artigo
 
 
 def build_corpus(
@@ -43,11 +48,18 @@ def build_corpus(
     *,
     max_articles: int = 100,
     allowed_licenses: set[License] | None = None,
+    label: str = "",
 ) -> list[CorpusEntry]:
-    """Preenche `index` e devolve uma entrada por artigo encontrado na busca."""
+    """Preenche `index` e devolve uma entrada por artigo encontrado na busca.
+
+    Pode ser chamada várias vezes sobre o mesmo índice (uma por tema): artigos já indexados
+    por uma query anterior voltam como "duplicado".
+    """
     report: list[CorpusEntry] = []
     for hit in client.search(query, max_results=max_articles):
-        entry = CorpusEntry(pmcid=hit.pmcid, doi=hit.doi, title=hit.title, status="")
+        entry = CorpusEntry(
+            pmcid=hit.pmcid, doi=hit.doi, title=hit.title, status="", consulta=label
+        )
         report.append(entry)
         if not hit.pmcid:
             entry.status = "sem PMCID (sem texto completo no PMC)"
@@ -103,7 +115,12 @@ def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--query", help="query do Europe PMC")
-    src.add_argument("--query-file", type=Path, help="arquivo com a query (# = comentário)")
+    src.add_argument(
+        "--query-file",
+        type=Path,
+        action="append",
+        help="arquivo com a query (# = comentário); repita para juntar temas no mesmo índice",
+    )
     ap.add_argument("--max", type=int, default=100, dest="max_articles")
     ap.add_argument("--email", default=None)
     ap.add_argument("--out", type=Path, default=Path("data/processed/literature"))
@@ -117,7 +134,10 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--query-prefix", default="")
     ap.add_argument("--passage-prefix", default="")
     args = ap.parse_args(argv)
-    query = read_query_file(args.query_file) if args.query_file else args.query
+    if args.query_file:
+        queries = [(f.stem, read_query_file(f)) for f in args.query_file]
+    else:
+        queries = [("query", args.query)]
 
     embedder = None
     if args.embedder:
@@ -130,23 +150,40 @@ def main(argv: list[str] | None = None) -> None:
 
     client = EuropePMCClient(args.raw, email=args.email)
     index = LiteratureIndex(embedder)
-    report = build_corpus(
-        client, query, index, max_articles=args.max_articles, allowed_licenses=allowed
-    )
+    report: list[CorpusEntry] = []
+    for label, query in queries:
+        report += build_corpus(
+            client,
+            query,
+            index,
+            max_articles=args.max_articles,
+            allowed_licenses=allowed,
+            label=label,
+        )
     client.close()
     index.save(args.out)
     with (args.out / "corpus_report.jsonl").open("w", encoding="utf-8") as f:
         for e in report:
             f.write(json.dumps(asdict(e), ensure_ascii=False) + "\n")
     (args.out / "query.json").write_text(
-        json.dumps({"query": query, "max": args.max_articles, "licenses": args.licenses}),
+        json.dumps(
+            {
+                "queries": [{"nome": n, "query": q} for n, q in queries],
+                "max_por_query": args.max_articles,
+                "licenses": args.licenses,
+            },
+            ensure_ascii=False,
+        ),
         "utf-8",
     )
 
-    counts = Counter(e.status for e in report)
     print(f"{len(report)} artigos encontrados, {len(index)} trechos indexados em {args.out}")
-    for status, n in counts.most_common():
-        print(f"  {n:4d}  {status}")
+    for label, _ in queries:
+        counts = Counter(e.status for e in report if e.consulta == label)
+        if len(queries) > 1:
+            print(f"{label}:")
+        for status, n in counts.most_common():
+            print(f"  {n:4d}  {status}")
     if any(e.status.startswith("erro ao baixar") for e in report):
         print(
             "Rode o mesmo comando de novo para tentar só os que falharam (os demais vêm do cache)."

@@ -125,3 +125,55 @@ def test_download_error_status_is_short_and_has_no_url(tmp_path):
     )
     report = build_corpus(c, "q", LiteratureIndex())
     assert report[0].status == "erro ao baixar (HTTP 500)"
+
+
+def test_cli_merges_several_query_files_into_one_index(tmp_path, monkeypatch, capsys):
+    import json
+
+    import ecofisio.literature.corpus as corpus_mod
+
+    real = corpus_mod.EuropePMCClient
+    monkeypatch.setattr(
+        corpus_mod,
+        "EuropePMCClient",
+        lambda raw, email=None: real(
+            raw, email=email, transport=httpx.MockTransport(handler), min_interval_s=0
+        ),
+    )
+    q1, q2 = tmp_path / "seca.txt", tmp_path / "baunilha.txt"
+    q1.write_text("drought\n", "utf-8")
+    q2.write_text("vanilla\n", "utf-8")
+    out = tmp_path / "lit"
+    main(
+        [
+            "--query-file",
+            str(q1),
+            "--query-file",
+            str(q2),
+            "--max",
+            "5",
+            "--out",
+            str(out),
+            "--raw",
+            str(tmp_path / "raw"),
+        ]
+    )
+    lines = [json.loads(x) for x in (out / "corpus_report.jsonl").read_text().splitlines()]
+    assert {x["consulta"] for x in lines} == {"seca", "baunilha"}
+    # o mesmo artigo voltou na segunda query: entra uma vez só
+    assert [x["status"] for x in lines if x["title"] == "OK"] == ["indexado", "duplicado"]
+    meta = json.loads((out / "query.json").read_text())
+    assert [q["nome"] for q in meta["queries"]] == ["seca", "baunilha"]
+    printed = capsys.readouterr().out
+    assert "seca:" in printed and "baunilha:" in printed
+
+
+def test_repo_vanilla_query_requires_plant_context():
+    from ecofisio.literature.corpus import read_query_file
+
+    q = read_query_file(Path(__file__).parents[1] / "queries" / "baunilha.txt")
+    assert '"Vanilla planifolia"' in q and q.endswith("OPEN_ACCESS:y")
+    import re
+
+    fora_de_frases = re.sub(r'"[^"]*"', " ", q.lower())
+    assert "vanilla" not in fora_de_frases  # "vanilla" só dentro de frases com contexto

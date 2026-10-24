@@ -87,6 +87,8 @@ python scripts/smoke_europepmc.py --email contato@exemplo.org
 ecofisio-corpus --query-file queries/seca_trocas_gasosas.txt --max 200 --licenses CC-BY,CC0 --email contato@exemplo.org
 ```
 
+Para juntar temas no mesmo índice, repita `--query-file` (ex.: `--query-file queries/seca_trocas_gasosas.txt --query-file queries/baunilha.txt`). O índice é refeito a cada execução com as queries passadas; o que já foi baixado vem do cache.
+
 As queries ficam em `queries/`, versionadas: a busca que gerou o corpus é reproduzível (requisito da revisão sistemática). Prefira `--query-file` a `--query` no Windows: o PowerShell remove as aspas duplas internas ao passar argumentos para programas externos.
 
 Para consultar o corpus direto, sem modelo:

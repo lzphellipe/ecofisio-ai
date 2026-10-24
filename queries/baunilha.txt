@@ -1,0 +1,6 @@
+# Baunilha (Vanilla spp.): ecofisiologia, bioquímica e pós-colheita.
+# Cuidado: "vanilla" sozinho traz artigos de aprendizado de máquina ("vanilla model") e de
+# produção microbiana de vanilina. Por isso a busca exige o nome da espécie ou o contexto da planta.
+("Vanilla planifolia" OR "Vanilla tahitensis" OR "Vanilla pompona" OR "Vanilla odorata"
+ OR "vanilla orchid" OR "vanilla pods" OR "vanilla beans" OR "vanilla cultivation")
+AND OPEN_ACCESS:y
