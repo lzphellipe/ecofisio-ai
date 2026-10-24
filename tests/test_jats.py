@@ -93,3 +93,60 @@ def test_external_entities_are_blocked():
     </title-group></article-meta></front></article>"""
     with pytest.raises(Exception):  # noqa: B017 (defusedxml levanta tipos variados)
         parse_jats(evil)
+
+
+# Blocos <permissions> reais do corpus (out/2026), reduzidos ao essencial.
+def _with_permissions(perms: str) -> bytes:
+    return (
+        '<article xmlns:xlink="http://www.w3.org/1999/xlink"><front><article-meta>'
+        '<article-id pub-id-type="doi">10.5555/x</article-id>'
+        "<title-group><article-title>T</article-title></title-group>"
+        f"{perms}</article-meta></front></article>"
+    ).encode()
+
+
+PLOS = (  # PMC13426935, PLOS ONE: link CC BY dentro do parágrafo
+    "<permissions><license><license-p>This is an open access article distributed under the "
+    'terms of the <ext-link xlink:href="https://creativecommons.org/licenses/by/4.0/" '
+    'ext-link-type="uri">Creative Commons Attribution License</ext-link>, which permits '
+    "unrestricted use.</license-p></license></permissions>"
+)
+PEERJ = (  # PMC12642916, PeerJ: o TEXTO diz "Attribution License", o LINK diz by-nc
+    "<permissions><license><license-p>This is an open access article distributed under the "
+    'terms of the <ext-link xlink:href="https://creativecommons.org/licenses/by-nc/4.0/" '
+    'ext-link-type="uri">Creative Commons Attribution License</ext-link>, which permits using '
+    "the work non-commercially.</license-p></license></permissions>"
+)
+PHOTOSYNTHETICA = (  # PMC13403240
+    "<permissions><license><license-p>This is an open access article distributed under the "
+    'terms of the <ext-link xlink:href="https://creativecommons.org/licenses/by-nc-nd/4.0/" '
+    'ext-link-type="uri">Creative Commons BY-NC-ND</ext-link> Licence.</license-p></license>'
+    "</permissions>"
+)
+
+
+@pytest.mark.parametrize(
+    ("perms", "expected"),
+    [(PLOS, License.CC_BY), (PEERJ, License.CC_BY_NC), (PHOTOSYNTHETICA, License.CC_BY_NC)],
+    ids=["plos-cc-by", "peerj-texto-engana-link-nc", "photosynthetica-nc-nd"],
+)
+def test_license_link_inside_paragraph(perms, expected):
+    art = parse_jats(_with_permissions(perms))
+    assert art.license is expected
+    assert art.license_source.startswith("https://creativecommons.org/licenses/")
+
+
+def test_conflicting_license_links_resolve_to_most_restrictive():
+    perms = (
+        '<permissions><ali:license_ref xmlns:ali="http://www.niso.org/schemas/ali/1.0/">'
+        "https://creativecommons.org/licenses/by/4.0/</ali:license_ref>"
+        '<license><license-p><ext-link xlink:href="https://creativecommons.org/licenses/'
+        'by-nc/4.0/">x</ext-link></license-p></license></permissions>'
+    )
+    assert parse_jats(_with_permissions(perms)).license is License.CC_BY_NC
+
+
+def test_text_creative_commons_acronym_and_vague_text():
+    assert classify_license("Creative Commons BY-NC-ND Licence") is License.CC_BY_NC
+    # texto vago sem sigla nem link continua desconhecido: não presumimos CC BY
+    assert classify_license("Creative Commons Attribution License") is License.UNKNOWN

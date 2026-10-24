@@ -44,7 +44,11 @@ def classify_license(text_or_url: str) -> License:
     s = text_or_url.lower()
     if "publicdomain/zero" in s or re.search(r"\bcc0\b", s):
         return License.CC0
-    m = re.search(r"licenses/([a-z-]+)/", s) or re.search(r"\bcc[ -]?(by(?:[ -](?:nc|sa|nd))*)", s)
+    m = (
+        re.search(r"licenses/([a-z-]+)/", s)
+        or re.search(r"\bcc[ -]?(by(?:[ -](?:nc|sa|nd))*)\b", s)
+        or re.search(r"creative commons[ -](by(?:[ -](?:nc|sa|nd))*)\b", s)
+    )
     if not m:
         return License.UNKNOWN
     kind = m.group(1).replace(" ", "-")
@@ -104,22 +108,44 @@ def _local(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
+# Do menos ao mais restritivo para o projeto: só CC0 e CC BY entram no treino.
+_RESTRICTIVENESS = [
+    License.CC0,
+    License.CC_BY,
+    License.CC_BY_SA,
+    License.CC_BY_ND,
+    License.CC_BY_NC,
+]
+
+
 def _find_license(meta: Element) -> tuple[License, str]:
+    """Licença declarada no artigo.
+
+    Ordem de confiança: links de licença (ali:license_ref, xlink:href do <license> e de
+    <ext-link> dentro dele) antes do texto. O texto engana: a PeerJ escreve "Creative Commons
+    Attribution License" com link para by-nc (caso real, PMC12642916). Se os links divergirem,
+    vale o mais restritivo.
+    """
     perms = meta.find("permissions")
     if perms is None:
         return License.UNKNOWN, ""
+    found: list[tuple[License, str]] = []
+    texts: list[str] = []
     for el in perms.iter():
         name = _local(el.tag)
         if name == "license_ref" and el.text:
-            return classify_license(el.text), el.text.strip()
-        if name == "license":
-            href = el.get(_XLINK_HREF) or ""
-            if href and (lic := classify_license(href)) is not License.UNKNOWN:
-                return lic, href
-            body = _text(el)
-            if lic := classify_license(body):
-                if lic is not License.UNKNOWN:
-                    return lic, body[:200]
+            found.append((classify_license(el.text), el.text.strip()))
+        elif name == "license":
+            texts.append(_text(el))
+            for sub in el.iter():  # o próprio <license> e qualquer <ext-link>/<uri> dentro dele
+                if href := sub.get(_XLINK_HREF):
+                    found.append((classify_license(href), href))
+    known = [(lic, src) for lic, src in found if lic is not License.UNKNOWN]
+    if known:
+        return max(known, key=lambda x: _RESTRICTIVENESS.index(x[0]))
+    for body in texts:
+        if (lic := classify_license(body)) is not License.UNKNOWN:
+            return lic, body[:200]
     return License.UNKNOWN, ""
 
 
