@@ -1,0 +1,13 @@
+{"id": "f01", "pergunta": "Como o déficit hídrico afeta a condutância estomática?", "tipo": "factual"}
+{"id": "f02", "pergunta": "Qual o efeito da seca sobre o rendimento quântico máximo do fotossistema II (Fv/Fm)?", "tipo": "factual"}
+{"id": "f03", "pergunta": "Sob seca, a queda da fotossíntese se deve mais à limitação estomática ou à limitação bioquímica?", "tipo": "factual", "observacao": "tema com divergência na literatura: espera-se força 'controverso' ou ressalvas"}
+{"id": "f04", "pergunta": "Quais parâmetros de fluorescência da clorofila indicam estresse hídrico severo?", "tipo": "factual"}
+{"id": "f05", "pergunta": "Como as trocas gasosas se recuperam após a reidratação de plantas submetidas à seca?", "tipo": "factual"}
+{"id": "f06", "pergunta": "Qual o papel do ácido abscísico no fechamento estomático durante a seca?", "tipo": "factual"}
+{"id": "f07", "pergunta": "A superexpressão de SBPase altera a resposta da fotossíntese à seca?", "tipo": "factual", "dois_esperados": ["10.3390/plants15192963"], "observacao": "artigo confirmado como CC BY no teste do Europe PMC; conferir se está no índice"}
+{"id": "f08", "pergunta": "Durante ondas de calor, o que acontece com a condutância estomática e o resfriamento foliar?", "tipo": "factual"}
+{"id": "s01", "pergunta": "Qual a dose de nitrogênio recomendada para soja no Cerrado?", "tipo": "sem_resposta", "observacao": "fora do escopo do corpus (seca e trocas gasosas)"}
+{"id": "s02", "pergunta": "Qual o mecanismo de resistência do cafeeiro à ferrugem (Hemileia vastatrix)?", "tipo": "sem_resposta", "observacao": "fitopatologia: fora do escopo do corpus"}
+{"id": "s03", "pergunta": "Qual a eficiência de corte de um laser de CO2 em chapas de aço?", "tipo": "sem_resposta", "observacao": "fora do domínio: testa se o modelo responde só por ver 'CO2'"}
+{"id": "a01", "pergunta": "Por que a seca aumenta o Vcmax em todas as espécies?", "tipo": "armadilha", "observacao": "premissa falsa: a resposta correta contesta a premissa"}
+{"id": "a02", "pergunta": "Um Fv/Fm de 0,95 indica que a planta está saudável?", "tipo": "armadilha", "observacao": "valor fisicamente implausível em folhas (máximo típico ~0,83-0,87): deveria apontar o problema"}

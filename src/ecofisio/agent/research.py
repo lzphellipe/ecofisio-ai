@@ -94,6 +94,9 @@ class ResearchAnswer:
     searches: list[str] = field(default_factory=list)
     transcript: list[dict[str, Any]] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    steps: int = 0  # chamadas ao modelo
+    repairs: int = 0  # pedidos de correção do JSON final
+    usage: dict[str, int] = field(default_factory=dict)  # tokens somados de todas as chamadas
 
     def to_dict(self) -> dict[str, Any]:
         def claim_d(rep: AuditReport) -> dict[str, Any]:
@@ -118,6 +121,9 @@ class ResearchAnswer:
             "bloqueadas": [{"texto": b.text, "motivos": b.reasons} for b in self.blocked],
             "lacunas": self.gaps,
             "buscas": self.searches,
+            "passos": self.steps,
+            "reparos": self.repairs,
+            "uso_tokens": self.usage,
             "transcricao": self.transcript,
         }
 
@@ -148,7 +154,8 @@ class ResearchAgent:
             {"role": "user", "content": question},
         ]
         searches: list[str] = []
-        repairs = 0
+        repairs = steps = 0
+        usage: dict[str, int] = {}
         final: dict[str, Any] | None = None
 
         for step in range(self.max_steps + self.max_repairs + 1):
@@ -161,6 +168,10 @@ class ResearchAgent:
                     }
                 )
             reply = self.model.chat(messages, tools=None if out_of_steps else [SEARCH_TOOL])
+            steps += 1
+            for key, val in (reply.usage or {}).items():
+                if isinstance(val, int):
+                    usage[key] = usage.get(key, 0) + val
             messages.append(reply.as_message())
 
             if reply.tool_calls and not out_of_steps:
@@ -196,6 +207,9 @@ class ResearchAgent:
             gaps=[str(g) for g in final.get("lacunas") or [] if str(g).strip()],
             searches=searches,
             transcript=messages,
+            steps=steps,
+            repairs=repairs,
+            usage=usage,
         )
         for raw in final.get("afirmacoes") or []:
             self._judge(raw if isinstance(raw, dict) else {"texto": str(raw)}, registry, answer)

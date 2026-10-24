@@ -16,6 +16,7 @@ Plano completo do projeto: [IA para Ecofisiologia e Bioquímica Vegetal — Plan
 | Verificador semântico | NLI confere se o trecho sustenta a afirmação; bloqueia afirmações estritas não sustentadas | `src/ecofisio/evidence/verify.py` |
 | Literatura | Busca no Europe PMC, download do JATS com cache imutável, licença lida do próprio artigo | `src/ecofisio/literature/` |
 | Busca (RAG) | BM25 + embeddings opcionais com fusão RRF; cada resultado vira citação; tipo de publicação em cada trecho | `src/ecofisio/rag/` |
+| Avaliador | Benchmark versionado, métricas de rigor (citações inventadas, bloqueios por motivo, abstenção fora do escopo), IC 95% por bootstrap e comparação pareada entre execuções | `src/ecofisio/eval/`, `benchmarks/` |
 | Agente base | LLM (qualquer servidor compatível com OpenAI) + busca; responde em afirmações que citam IDs de trechos; cada afirmação é auditada antes de sair | `src/ecofisio/agent/` |
 
 Ainda não há dashboard: entra no começo da fase 2.
@@ -39,7 +40,9 @@ ecofisio-ai/
 │   ├── literature/      # Europe PMC, parser JATS, montagem do corpus
 │   ├── rag/             # índice BM25 + denso, fusão RRF
 │   ├── agent/           # cliente de LLM, ferramentas, agente de pesquisa, CLI ecofisio-ask
+│   ├── eval/            # benchmark, métricas, relatório e comparação (ecofisio-eval)
 │   └── kernels.py       # fachada Python dos kernels C++
+├── benchmarks/          # conjuntos de perguntas de teste (JSONL versionado)
 ├── scripts/             # verificações ao vivo (ex.: smoke_europepmc.py)
 ├── tests/               # pytest
 ├── data/                # raw/ validated/ processed/ analytics/ (fora do git; DVC)
@@ -110,6 +113,17 @@ ecofisio-ask "Qual o efeito da seca sobre o Vcmax?" --crossref-email contato@exe
 ```
 
 O modelo nunca escreve o trecho que cita: ele cita IDs (T1, T2...) dos trechos que a busca devolveu, e a citação é montada a partir do texto real. Afirmações com ID inexistente, força da evidência exagerada, artigo retratado ou trecho que não as sustenta voltam como **bloqueadas**, com o motivo.
+
+## Avaliar o assistente
+
+```powershell
+ecofisio-eval run --benchmark benchmarks/semente.jsonl --rotulo qwen3-4b-cpu --crossref-email contato@exemplo.org --sem-verificacao-semantica
+ecofisio-eval compare runs/eval/<execucao-A>/resultados.json runs/eval/<execucao-B>/resultados.json
+```
+
+Cada execução grava em `runs/eval/<data>_<rotulo>/` o relatório (`relatorio.md`), os números (`resultados.json`) e o rastro completo de cada pergunta. O relatório traz IC 95% por bootstrap sobre as perguntas; a comparação usa bootstrap pareado e só declara "B melhor" quando o intervalo da diferença exclui zero. Execuções com versões diferentes do benchmark não são comparadas.
+
+Métricas: perguntas com erro, perguntas sem busca, fração de afirmações bloqueadas e o motivo de cada bloqueio, citações inventadas por pergunta, recall dos DOIs esperados, abstenção correta nas perguntas fora do escopo, latência e tokens. As armadilhas (premissa falsa) ficam marcadas para revisão humana.
 
 ## Princípios
 

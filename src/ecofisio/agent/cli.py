@@ -22,9 +22,8 @@ from ecofisio.evidence.retraction import CrossrefClient, RetractionChecker, Retr
 from ecofisio.rag.index import LiteratureIndex
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    ap.add_argument("pergunta")
+def add_agent_arguments(ap: argparse.ArgumentParser) -> None:
+    """Opções de modelo, índice e verificação, comuns ao ecofisio-ask e ao ecofisio-eval."""
     ap.add_argument(
         "--base-url", default=os.environ.get("ECOFISIO_LLM_URL", "http://localhost:8000/v1")
     )
@@ -45,10 +44,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--pensar", action="store_true", help="liga o modo de raciocínio do Qwen 3")
     ap.add_argument("--max-passos", type=int, default=6)
-    ap.add_argument("--rastro", type=Path, default=Path("runs"), help="pasta dos rastros JSON")
-    ap.add_argument("--json", action="store_true", help="imprime o resultado em JSON")
-    args = ap.parse_args(argv)
 
+
+def build_agent(
+    args: argparse.Namespace, ap: argparse.ArgumentParser
+) -> tuple[ResearchAgent, OpenAICompatibleChat, LiteratureIndex]:
     if args.rw_csv is None and args.crossref_email is None:
         ap.error(
             "informe --rw-csv e/ou --crossref-email: sem checagem de retratação, nada é entregue"
@@ -63,7 +63,6 @@ def main(argv: list[str] | None = None) -> int:
         from ecofisio.evidence.verify import NLIVerifier
 
         verifier = NLIVerifier(args.nli_model)
-
     model = OpenAICompatibleChat(
         args.base_url,
         args.model,
@@ -78,6 +77,17 @@ def main(argv: list[str] | None = None) -> int:
         require_semantic=not args.sem_verificacao_semantica,
         max_steps=args.max_passos,
     )
+    return agent, model, index
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
+    ap.add_argument("pergunta")
+    add_agent_arguments(ap)
+    ap.add_argument("--rastro", type=Path, default=Path("runs"), help="pasta dos rastros JSON")
+    ap.add_argument("--json", action="store_true", help="imprime o resultado em JSON")
+    args = ap.parse_args(argv)
+    agent, model, _ = build_agent(args, ap)
     try:
         answer = agent.ask(args.pergunta)
     except (LLMError, AgentError) as exc:
