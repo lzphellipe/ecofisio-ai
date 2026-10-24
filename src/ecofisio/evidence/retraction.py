@@ -165,8 +165,8 @@ class RetractionChecker:
         results = [
             s
             for s in (
-                self.index.lookup(doi) if self.index else None,
-                self.client.check(doi) if self.client else None,
+                self.index.lookup(doi) if self.index is not None else None,
+                self.client.check(doi) if self.client is not None else None,
             )
             if s is not None
         ]

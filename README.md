@@ -15,9 +15,10 @@ Plano completo do projeto: [IA para Ecofisiologia e Bioquímica Vegetal — Plan
 | Evidência | Citações com DOI, trecho e localizador; força da evidência; checagem de retratações | `src/ecofisio/evidence/` |
 | Verificador semântico | NLI confere se o trecho sustenta a afirmação; bloqueia afirmações estritas não sustentadas | `src/ecofisio/evidence/verify.py` |
 | Literatura | Busca no Europe PMC, download do JATS com cache imutável, licença lida do próprio artigo | `src/ecofisio/literature/` |
-| Busca (RAG) | BM25 + embeddings opcionais com fusão RRF; cada resultado vira citação | `src/ecofisio/rag/` |
+| Busca (RAG) | BM25 + embeddings opcionais com fusão RRF; cada resultado vira citação; tipo de publicação em cada trecho | `src/ecofisio/rag/` |
+| Agente base | LLM (qualquer servidor compatível com OpenAI) + busca; responde em afirmações que citam IDs de trechos; cada afirmação é auditada antes de sair | `src/ecofisio/agent/` |
 
-Ainda não há LLM nem dashboard: entram nas próximas etapas da fase 1 e nas fases seguintes do roadmap.
+Ainda não há dashboard: entra no começo da fase 2.
 
 ## Arquitetura do código
 
@@ -37,6 +38,7 @@ ecofisio-ai/
 │   ├── evidence/        # citações, força da evidência, retratações, verificador NLI
 │   ├── literature/      # Europe PMC, parser JATS, montagem do corpus
 │   ├── rag/             # índice BM25 + denso, fusão RRF
+│   ├── agent/           # cliente de LLM, ferramentas, agente de pesquisa, CLI ecofisio-ask
 │   └── kernels.py       # fachada Python dos kernels C++
 ├── scripts/             # verificações ao vivo (ex.: smoke_europepmc.py)
 ├── tests/               # pytest
@@ -98,6 +100,16 @@ citation = hit.to_citation()  # DOI + trecho + seção, pronto para um Claim
 ```
 
 Embeddings densos (`pip install -e ".[rag]"`, `--embedder <modelo>`) e o verificador semântico (`pip install -e ".[nli]"`, `NLIVerifier(<modelo>)`) são opcionais e não têm modelo padrão: escolha, valide num conjunto anotado e registre o nome. Sem verificador, a auditoria bloqueia afirmações citadas em vez de aprová-las.
+
+## Perguntar ao assistente (LLM base + RAG)
+
+O modelo roda numa GPU alugada com vLLM; o guia passo a passo está em [`docs/llm-base-brev.md`](docs/llm-base-brev.md).
+
+```powershell
+ecofisio-ask "Qual o efeito da seca sobre o Vcmax?" --crossref-email contato@exemplo.org
+```
+
+O modelo nunca escreve o trecho que cita: ele cita IDs (T1, T2...) dos trechos que a busca devolveu, e a citação é montada a partir do texto real. Afirmações com ID inexistente, força da evidência exagerada, artigo retratado ou trecho que não as sustenta voltam como **bloqueadas**, com o motivo.
 
 ## Princípios
 

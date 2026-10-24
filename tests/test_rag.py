@@ -159,7 +159,17 @@ def test_tool_result_shape(corpus):
     idx = LiteratureIndex()
     idx.add_article(corpus[1])
     r = idx.search("Rubisco")[0].as_tool_result()
-    assert set(r) == {"doi", "title", "year", "section", "license", "text", "score"}
+    assert set(r) == {
+        "doi",
+        "title",
+        "year",
+        "section",
+        "license",
+        "article_type",
+        "primary_evidence",
+        "text",
+        "score",
+    }
 
 
 def test_empty_query_rejected():
@@ -170,3 +180,30 @@ def test_empty_query_rejected():
 def test_empty_index_returns_no_hits():
     assert LiteratureIndex(HashEmbedder()).search("drought") == []
     assert LiteratureIndex().search("drought", mode="lexical") == []
+
+
+def test_article_type_flows_to_passages_and_tool_result(corpus):
+    idx = LiteratureIndex()
+    idx.add_article(corpus[0])  # fixture JATS: research-article
+    hit = idx.search("stomatal conductance drought")[0]
+    assert hit.passage.article_type == "research-article" and hit.passage.primary_evidence
+    assert hit.as_tool_result()["primary_evidence"] is True
+
+
+def test_index_saved_before_article_type_still_loads(tmp_path, corpus):
+    import json
+
+    idx = LiteratureIndex()
+    idx.add_article(corpus[1])
+    idx.save(tmp_path / "idx")
+    # simula um índice antigo: registros sem o campo article_type, hash recalculado sobre eles
+    lines = (tmp_path / "idx" / "passages.jsonl").read_text().splitlines()
+    old = [{k: v for k, v in json.loads(x).items() if k != "article_type"} for x in lines]
+    (tmp_path / "idx" / "passages.jsonl").write_text("\n".join(json.dumps(r) for r in old) + "\n")
+    from ecofisio.rag.index import _hash_records
+
+    meta = json.loads((tmp_path / "idx" / "meta.json").read_text())
+    meta["corpus_sha256"] = _hash_records(old)
+    (tmp_path / "idx" / "meta.json").write_text(json.dumps(meta))
+    loaded = LiteratureIndex.load(tmp_path / "idx")
+    assert loaded.passages[0].article_type == "" and not loaded.passages[0].primary_evidence

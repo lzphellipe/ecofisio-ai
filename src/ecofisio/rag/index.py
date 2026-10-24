@@ -26,6 +26,9 @@ from ecofisio.rag.bm25 import BM25, tokenize
 from ecofisio.rag.embed import Embedder
 
 RRF_K = 60
+# Tipos JATS de pesquisa original. Revisões sintetizam evidência (úteis, mas secundárias);
+# editoriais e comentários são opinião.
+PRIMARY_TYPES = frozenset({"research-article", "brief-report", "rapid-communication"})
 Mode = Literal["lexical", "dense", "hybrid"]
 
 
@@ -39,10 +42,16 @@ class Passage:
     section: str
     license: str
     text: str
+    article_type: str = ""  # JATS article-type; "" em índices antigos (anteriores ao campo)
 
     @property
     def citable(self) -> bool:
         return self.doi is not None
+
+    @property
+    def primary_evidence(self) -> bool:
+        """Editorial, revisão, comentário etc. não são resultado experimental primário."""
+        return self.article_type in PRIMARY_TYPES
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,9 +75,18 @@ class Hit:
             "year": p.year,
             "section": p.section,
             "license": p.license,
+            "article_type": p.article_type or "desconhecido",
+            "primary_evidence": p.primary_evidence,
             "text": p.text,
             "score": round(self.score, 6),
         }
+
+
+def _hash_records(records) -> str:
+    h = hashlib.sha256()
+    for r in records:
+        h.update(json.dumps(r, sort_keys=True, ensure_ascii=False).encode())
+    return h.hexdigest()
 
 
 class LiteratureIndex:
@@ -98,6 +116,7 @@ class LiteratureIndex:
                 section=c.section,
                 license=str(article.license),
                 text=c.text,
+                article_type=article.article_type,
             )
             for c in chunk_article(article, **chunk_kw)
         ]
@@ -165,10 +184,7 @@ class LiteratureIndex:
 
     # ---- persistência -------------------------------------------------------------------
     def corpus_hash(self) -> str:
-        h = hashlib.sha256()
-        for p in self.passages:
-            h.update(json.dumps(asdict(p), sort_keys=True, ensure_ascii=False).encode())
-        return h.hexdigest()
+        return _hash_records(asdict(p) for p in self.passages)
 
     def save(self, directory: Path) -> None:
         self._ensure_built()
@@ -198,10 +214,13 @@ class LiteratureIndex:
         meta = json.loads((directory / "meta.json").read_text("utf-8"))
         idx = cls(embedder)
         with (directory / "passages.jsonl").open(encoding="utf-8") as f:
-            idx.passages = [Passage(**json.loads(line)) for line in f]
-        idx._keys = {p.doi or p.pmcid or p.title for p in idx.passages}
-        if idx.corpus_hash() != meta["corpus_sha256"]:
+            records = [json.loads(line) for line in f]
+        # o hash é conferido sobre os registros como estão no arquivo, para índices salvos antes
+        # de um campo novo continuarem carregando (o campo novo entra com o valor padrão)
+        if _hash_records(records) != meta["corpus_sha256"]:
             raise ValueError("passages.jsonl não bate com o hash do meta.json (arquivo alterado?)")
+        idx.passages = [Passage(**r) for r in records]
+        idx._keys = {p.doi or p.pmcid or p.title for p in idx.passages}
         idx._bm25 = BM25([tokenize(f"{p.title}. {p.section}. {p.text}") for p in idx.passages])
         emb_path = directory / "embeddings.npy"
         if embedder is not None:

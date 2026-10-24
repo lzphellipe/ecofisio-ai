@@ -21,6 +21,7 @@ data/analytics/*
 !data/**/.gitkeep
 
 # Experimentos e modelos
+runs/
 mlruns/
 wandb/
 checkpoints/

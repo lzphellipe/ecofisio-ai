@@ -75,6 +75,7 @@ class Article:
     license: License
     license_source: str  # URL ou texto de onde a licença foi lida
     paragraphs: list[Paragraph] = field(default_factory=list)
+    article_type: str = ""  # atributo JATS article-type, ex.: research-article, editorial
 
     @property
     def citable(self) -> bool:
@@ -185,6 +186,7 @@ def parse_jats(xml: bytes | str) -> Article:
         license=lic,
         license_source=lic_src,
         paragraphs=paragraphs,
+        article_type=(article.get("article-type") or "").strip().lower(),
     )
 
 

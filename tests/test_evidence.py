@@ -230,3 +230,12 @@ def test_label_indices_read_from_model_config():
 )
 def test_decide_thresholds(e, c, expected):
     assert decide(e, c, min_entailment=0.5, min_contradiction=0.5) is expected
+
+
+def test_empty_retraction_index_still_counts_as_checked(tmp_path):
+    p = tmp_path / "vazio.csv"
+    p.write_text("Record ID,OriginalPaperDOI,RetractionDOI,RetractionNature\n", encoding="utf-8")
+    idx = RetractionWatchIndex.from_csv(p)
+    assert len(idx) == 0
+    s = RetractionChecker(index=idx).check(OK)
+    assert s.checked and not s.retracted
