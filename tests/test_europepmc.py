@@ -114,3 +114,59 @@ def test_rate_limit_spaces_requests(tmp_path):
     c, sleeps = client(tmp_path, FakeAPI(), min_interval_s=0.5)
     list(c.search("x", max_results=10))  # duas páginas = duas requisições
     assert sleeps == [pytest.approx(0.5)]
+
+
+def flaky(fails: int, status: int = 500, headers: dict | None = None):
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] <= fails:
+            return httpx.Response(status, headers=headers or {})
+        return httpx.Response(200, content=XML)
+
+    return handler, calls
+
+
+def test_transient_500_is_retried_with_backoff(tmp_path):
+    handler, calls = flaky(2)
+    c, sleeps = client(tmp_path, handler, min_interval_s=0)
+    assert c.full_text_xml("PMC0000001") == XML
+    assert calls["n"] == 3
+    assert sleeps == [1.0, 2.0]
+
+
+def test_retry_after_header_is_honored(tmp_path):
+    handler, _ = flaky(1, status=429, headers={"Retry-After": "7"})
+    c, sleeps = client(tmp_path, handler, min_interval_s=0)
+    c.full_text_xml("PMC0000001")
+    assert sleeps == [7.0]
+
+
+def test_persistent_500_gives_up_and_raises(tmp_path):
+    handler, calls = flaky(99)
+    c, _ = client(tmp_path, handler, min_interval_s=0, retries=2)
+    with pytest.raises(httpx.HTTPStatusError):
+        c.full_text_xml("PMC0000001")
+    assert calls["n"] == 3
+    assert not (tmp_path / "raw" / "PMC0000001.xml").exists()
+
+
+def test_404_is_not_retried(tmp_path):
+    handler, calls = flaky(99, status=404)
+    c, _ = client(tmp_path, handler, min_interval_s=0)
+    assert c.full_text_xml("PMC0000001") is None
+    assert calls["n"] == 1
+
+
+def test_network_error_is_retried(tmp_path):
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise httpx.ConnectError("queda")
+        return httpx.Response(200, content=XML)
+
+    c, sleeps = client(tmp_path, handler, min_interval_s=0)
+    assert c.full_text_xml("PMC0000001") == XML and sleeps == [1.0]

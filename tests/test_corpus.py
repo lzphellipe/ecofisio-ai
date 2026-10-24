@@ -107,3 +107,21 @@ def test_repo_query_file_is_valid():
 
     q = read_query_file(Path(__file__).parents[1] / "queries" / "seca_trocas_gasosas.txt")
     assert q.startswith('("stomatal conductance"') and q.endswith("OPEN_ACCESS:y")
+
+
+def test_download_error_status_is_short_and_has_no_url(tmp_path):
+    def h(request):
+        if request.url.path.endswith("/search"):
+            return httpx.Response(200, json={"resultList": {"result": [{"pmcid": "PMC0000009"}]}})
+        return httpx.Response(500)
+
+    c = EuropePMCClient(
+        tmp_path / "raw",
+        email="x@example.org",
+        transport=httpx.MockTransport(h),
+        min_interval_s=0,
+        retries=1,
+        backoff_s=0,
+    )
+    report = build_corpus(c, "q", LiteratureIndex())
+    assert report[0].status == "erro ao baixar (HTTP 500)"

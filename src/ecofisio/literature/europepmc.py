@@ -23,6 +23,16 @@ from typing import Any
 import httpx
 
 BASE = "https://www.ebi.ac.uk/europepmc/webservices/rest/"
+_RETRY_STATUS = {429, 500, 502, 503, 504}
+_MAX_RETRY_AFTER_S = 60.0
+
+
+def _retry_after(resp: httpx.Response) -> float | None:
+    """Segundos pedidos no cabeçalho Retry-After (só a forma numérica), com teto."""
+    try:
+        return min(float(resp.headers["Retry-After"]), _MAX_RETRY_AFTER_S)
+    except (KeyError, ValueError):
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,7 +71,10 @@ class EuropePMCClient:
         transport: httpx.BaseTransport | None = None,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
+        retries: int = 3,
+        backoff_s: float = 1.0,
     ) -> None:
+        self._retries, self._backoff = retries, backoff_s
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._email = email
@@ -77,14 +90,31 @@ class EuropePMCClient:
         )
 
     def _get(self, path: str, params: dict[str, Any] | None = None) -> httpx.Response:
-        wait = self._min_interval - (self._clock() - self._last)
-        if wait > 0:
-            self._sleep(wait)
-        self._last = self._clock()
+        """GET com limite de taxa e novas tentativas para falhas temporárias.
+
+        Repete em erro de rede, 429 e 5xx (no teste ao vivo, ~4% dos fullTextXML deram 500
+        isolados). Espera 1 s, 2 s, 4 s... ou o `Retry-After` do servidor, se vier. 4xx não
+        temporários (ex.: 404) voltam na hora.
+        """
         params = dict(params or {})
         if self._email:
             params["email"] = self._email
-        return self._http.get(path, params=params)
+        for attempt in range(self._retries + 1):
+            wait = self._min_interval - (self._clock() - self._last)
+            if wait > 0:
+                self._sleep(wait)
+            self._last = self._clock()
+            try:
+                resp = self._http.get(path, params=params)
+            except httpx.TransportError:
+                if attempt == self._retries:
+                    raise
+                self._sleep(self._backoff * 2**attempt)
+                continue
+            if resp.status_code not in _RETRY_STATUS or attempt == self._retries:
+                return resp
+            self._sleep(_retry_after(resp) or self._backoff * 2**attempt)
+        raise AssertionError("inalcançável")  # pragma: no cover
 
     def search_page(
         self, query: str, *, cursor: str = "*", page_size: int = 100

@@ -18,6 +18,8 @@ from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+import httpx
+
 from ecofisio.literature.europepmc import EuropePMCClient
 from ecofisio.literature.jats import License, parse_jats
 from ecofisio.rag.index import LiteratureIndex
@@ -53,7 +55,7 @@ def build_corpus(
         try:
             xml = client.full_text_xml(hit.pmcid)
         except Exception as exc:  # noqa: BLE001 - qualquer falha de rede vira motivo registrado
-            entry.status = f"erro ao baixar: {exc}"
+            entry.status = f"erro ao baixar ({_describe(exc)})"
             continue
         if xml is None:
             entry.status = "sem fullTextXML"
@@ -79,6 +81,13 @@ def build_corpus(
         entry.passages = n
         entry.status = "indexado" if n else "duplicado"
     return report
+
+
+def _describe(exc: Exception) -> str:
+    """Erro curto, sem URL: a URL repetiria o e-mail de contato em cada linha do relatório."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f"HTTP {exc.response.status_code}"
+    return type(exc).__name__
 
 
 def read_query_file(path: Path) -> str:
@@ -134,12 +143,14 @@ def main(argv: list[str] | None = None) -> None:
         "utf-8",
     )
 
-    counts = Counter(
-        "indexado" if e.status == "indexado" else e.status.split(" (")[0] for e in report
-    )
+    counts = Counter(e.status for e in report)
     print(f"{len(report)} artigos encontrados, {len(index)} trechos indexados em {args.out}")
     for status, n in counts.most_common():
         print(f"  {n:4d}  {status}")
+    if any(e.status.startswith("erro ao baixar") for e in report):
+        print(
+            "Rode o mesmo comando de novo para tentar só os que falharam (os demais vêm do cache)."
+        )
 
 
 if __name__ == "__main__":
