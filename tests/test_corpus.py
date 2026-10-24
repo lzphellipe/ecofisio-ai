@@ -92,3 +92,18 @@ def test_cli_writes_index_and_report(tmp_path, monkeypatch, capsys):
     assert "artigos encontrados" in capsys.readouterr().out
     loaded = LiteratureIndex.load(out)
     assert loaded.search("stomatal conductance drought")
+
+
+def test_query_file_ignores_comments_and_bom(tmp_path):
+    from ecofisio.literature.corpus import read_query_file
+
+    f = tmp_path / "q.txt"
+    f.write_text('﻿# comentário\n("a b" OR c)\n\n  AND d\n', encoding="utf-8")
+    assert read_query_file(f) == '("a b" OR c) AND d'
+
+
+def test_repo_query_file_is_valid():
+    from ecofisio.literature.corpus import read_query_file
+
+    q = read_query_file(Path(__file__).parents[1] / "queries" / "seca_trocas_gasosas.txt")
+    assert q.startswith('("stomatal conductance"') and q.endswith("OPEN_ACCESS:y")

@@ -75,13 +75,14 @@ Os valores de Vcmax e J são **aparentes** (base de Ci, condutância do mesofilo
 ## Corpus de literatura e busca
 
 ```bash
-# 1. confira a API e a sintaxe da query (este código foi testado sem rede)
+# 1. confira a API e a sintaxe da query
 python scripts/smoke_europepmc.py --email contato@exemplo.org
 
 # 2. monte o corpus: baixa o JATS, lê a licença, indexa e registra cada artigo
-ecofisio-corpus --query '"stomatal conductance" AND drought AND OPEN_ACCESS:y' \
-    --max 200 --email contato@exemplo.org --out data/processed/literature
+ecofisio-corpus --query-file queries/seca_trocas_gasosas.txt --max 200 --licenses CC-BY,CC0 --email contato@exemplo.org
 ```
+
+As queries ficam em `queries/`, versionadas: a busca que gerou o corpus é reproduzível (requisito da revisão sistemática). Prefira `--query-file` a `--query` no Windows: o PowerShell remove as aspas duplas internas ao passar argumentos para programas externos.
 
 `corpus_report.jsonl` diz, para cada artigo encontrado, se entrou no índice e, se não, por quê. A licença fica em cada trecho; só CC BY e CC0 podem ir para o treino do LLM (`--licenses CC-BY,CC0` filtra já na indexação).
 

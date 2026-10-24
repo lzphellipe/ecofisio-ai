@@ -1,0 +1,5 @@
+# Corpus inicial: efeitos da seca sobre trocas gasosas e fotoquímica.
+# Sintaxe do Europe PMC. Linhas com # são ignoradas; as demais são unidas com espaço.
+("stomatal conductance" OR photosynthesis OR "chlorophyll fluorescence")
+AND drought
+AND OPEN_ACCESS:y

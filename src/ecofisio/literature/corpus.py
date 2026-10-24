@@ -3,10 +3,9 @@
 Cada artigo encontrado gera uma linha no relatório (`corpus_report.jsonl`) dizendo se entrou e,
 se não, por quê. Nada é descartado em silêncio.
 
-Uso:
-    python -m ecofisio.literature.corpus \\
-        --query '"stomatal conductance" AND drought AND OPEN_ACCESS:y' \\
-        --max 200 --email contato@exemplo.org --out data/processed/literature
+Uso (a query num arquivo evita problemas de aspas no PowerShell e fica versionada):
+    ecofisio-corpus --query-file queries/seca_trocas_gasosas.txt --max 200 \\
+        --licenses CC-BY,CC0 --email contato@exemplo.org
 
 Confira a sintaxe da query no Europe PMC (scripts/smoke_europepmc.py) antes de um download grande.
 """
@@ -82,9 +81,20 @@ def build_corpus(
     return report
 
 
+def read_query_file(path: Path) -> str:
+    """Lê a query de um arquivo: ignora linhas vazias e comentários (#), junta o resto."""
+    lines = path.read_text(encoding="utf-8-sig").splitlines()  # -sig: tolera BOM do Bloco de Notas
+    query = " ".join(ln.strip() for ln in lines if ln.strip() and not ln.lstrip().startswith("#"))
+    if not query:
+        raise SystemExit(f"{path}: arquivo de query vazio")
+    return query
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    ap.add_argument("--query", required=True)
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("--query", help="query do Europe PMC")
+    src.add_argument("--query-file", type=Path, help="arquivo com a query (# = comentário)")
     ap.add_argument("--max", type=int, default=100, dest="max_articles")
     ap.add_argument("--email", default=None)
     ap.add_argument("--out", type=Path, default=Path("data/processed/literature"))
@@ -98,6 +108,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--query-prefix", default="")
     ap.add_argument("--passage-prefix", default="")
     args = ap.parse_args(argv)
+    query = read_query_file(args.query_file) if args.query_file else args.query
 
     embedder = None
     if args.embedder:
@@ -111,7 +122,7 @@ def main(argv: list[str] | None = None) -> None:
     client = EuropePMCClient(args.raw, email=args.email)
     index = LiteratureIndex(embedder)
     report = build_corpus(
-        client, args.query, index, max_articles=args.max_articles, allowed_licenses=allowed
+        client, query, index, max_articles=args.max_articles, allowed_licenses=allowed
     )
     client.close()
     index.save(args.out)
@@ -119,7 +130,7 @@ def main(argv: list[str] | None = None) -> None:
         for e in report:
             f.write(json.dumps(asdict(e), ensure_ascii=False) + "\n")
     (args.out / "query.json").write_text(
-        json.dumps({"query": args.query, "max": args.max_articles, "licenses": args.licenses}),
+        json.dumps({"query": query, "max": args.max_articles, "licenses": args.licenses}),
         "utf-8",
     )
 
