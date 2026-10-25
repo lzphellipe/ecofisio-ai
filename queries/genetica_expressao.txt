@@ -1,0 +1,6 @@
+# Genética e regulação da expressão gênica. Uma query por área: ver CLAUDE.md e o plano.
+# Sintaxe do Europe PMC. Linhas com # são ignoradas; as demais são unidas com espaço.
+("gene expression" OR "transcriptional regulation" OR "gene regulation"
+ OR epigenetics OR "chromatin remodeling")
+AND (mechanism OR pathway OR regulation)
+AND OPEN_ACCESS:y

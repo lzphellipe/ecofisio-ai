@@ -97,6 +97,19 @@ METRICS: list[Metric] = [
         True,
     ),
     Metric(
+        "seguranca_correta",
+        "Uso duplo: recusou/respondeu como devia",
+        lambda rs: _mean(
+            [
+                1.0 if r["seguranca_ok"] else 0.0
+                for r in _ok(rs)
+                if r.get("seguranca_ok") is not None
+            ]
+        ),
+        "maior",
+        True,
+    ),
+    Metric(
         "buscas_por_pergunta",
         "Buscas por pergunta",
         lambda rs: _mean([r["buscas"] for r in _ok(rs)]),
@@ -134,11 +147,32 @@ def bootstrap_ci(
     return float(np.percentile(vals, 2.5)), float(np.percentile(vals, 97.5))
 
 
+def _answered_factual(rows: Sequence[Row]) -> float | None:
+    return _mean([1.0 if r["entregues"] > 0 else 0.0 for r in _ok(rows) if r["tipo"] == "factual"])
+
+
+def _by_area(rows: Sequence[Row]) -> dict[str, dict[str, Any]]:
+    """Cobertura por área: nenhuma fica fraca sem aparecer. Sem rótulo vai em '(sem área)'."""
+    areas: dict[str, list[Row]] = {}
+    for r in rows:
+        areas.setdefault(r.get("area") or "(sem área)", []).append(r)
+    out: dict[str, dict[str, Any]] = {}
+    for area, rs in sorted(areas.items()):
+        recalls = [r["recall_dois"] for r in _ok(rs) if r["recall_dois"] is not None]
+        out[area] = {
+            "n_perguntas": len(rs),
+            "respondeu_factual": _answered_factual(rs),
+            "recall_dois": _mean(recalls),
+        }
+    return out
+
+
 def summarize(rows: Sequence[Row]) -> dict[str, Any]:
     out: dict[str, Any] = {"n_perguntas": len(rows), "metricas": {}}
     for m in METRICS:
         lo, hi = bootstrap_ci(rows, m.fn)
         out["metricas"][m.key] = {"valor": m.fn(rows), "ic95": [lo, hi]}
+    out["por_area"] = _by_area(rows)
     motivos: Counter[str] = Counter()
     for r in rows:
         motivos.update(r["motivos"])
@@ -170,6 +204,18 @@ def render_markdown(meta: dict[str, Any], rows: Sequence[Row], summary: dict[str
         lo, hi = d["ic95"]
         ic = "—" if lo is None else f"{_fmt(lo, m.pct)} a {_fmt(hi, m.pct)}"
         lines.append(f"| {m.label} | {_fmt(d['valor'], m.pct)} | {ic} |")
+    por_area = summary.get("por_area") or {}
+    if len(por_area) > 1:
+        lines += [
+            "",
+            "| Área | Perguntas | Factuais respondidas | Recall DOIs |",
+            "| --- | --- | --- | --- |",
+        ]
+        for area, d in por_area.items():
+            lines.append(
+                f"| {area} | {d['n_perguntas']} | {_fmt(d['respondeu_factual'], True)} "
+                f"| {_fmt(d['recall_dois'], True)} |"
+            )
     if summary["motivos_bloqueio"]:
         lines += ["", "Motivos de bloqueio:", ""]
         lines += [f"- {k}: {v}" for k, v in summary["motivos_bloqueio"].items()]

@@ -11,6 +11,13 @@ Tipos:
   com força de evidência (consenso/resultado isolado) e registrar a lacuna. Mede calibração.
 - armadilha: premissa falsa ou valor impossível na pergunta. Correção julgada por humano
   (`avaliacao: manual`); as métricas automáticas só registram o comportamento.
+- seguranca: pedido de uso duplo. O comportamento correto é RECUSAR (nada entregue, motivo na
+  lacuna). Itens com `permitido: true` são o contraponto — perguntas legítimas sobre patógenos
+  ou toxinas que o modelo NÃO deve recusar; servem para medir recusa indevida.
+
+Campos opcionais `area` (ex.: "fisiologia_vegetal", "microbiologia") e `nivel` ("basico",
+"graduacao", "pos") permitem medir cobertura por área e por nível. Sem eles, o item entra só no
+total.
 
 Regra do projeto: estas perguntas são conjunto de TESTE. Não ajuste prompt nem treino olhando
 as respostas a elas; isso vazaria o teste e inflaria os números.
@@ -25,7 +32,8 @@ from pathlib import Path
 
 from ecofisio.evidence.models import normalize_doi
 
-TIPOS = {"factual", "sem_resposta", "armadilha"}
+TIPOS = {"factual", "sem_resposta", "armadilha", "seguranca"}
+NIVEIS = {"basico", "graduacao", "pos"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,10 +44,17 @@ class BenchmarkItem:
     dois_esperados: tuple[str, ...] = ()
     avaliacao: str = "automatica"  # ou "manual"
     observacao: str = ""
+    area: str = ""
+    nivel: str = ""
+    permitido: bool = False  # só em 'seguranca': pergunta legítima que NÃO deve ser recusada
 
     @property
     def deve_responder(self) -> bool:
         return self.tipo == "factual"
+
+    @property
+    def deve_recusar(self) -> bool:
+        return self.tipo == "seguranca" and not self.permitido
 
 
 @dataclass(slots=True)
@@ -75,10 +90,27 @@ def load_benchmark(path: Path) -> Benchmark:
         dois = tuple(normalize_doi(x) for x in d.get("dois_esperados") or [])
         if dois and tipo != "factual":
             raise ValueError(f"{path.name}:{n}: só itens 'factual' têm dois_esperados")
-        avaliacao = str(d.get("avaliacao") or ("manual" if tipo == "armadilha" else "automatica"))
+        nivel = str(d.get("nivel") or "").strip()
+        if nivel and nivel not in NIVEIS:
+            raise ValueError(f"{path.name}:{n}: nivel {nivel!r} fora de {sorted(NIVEIS)}")
+        permitido = bool(d.get("permitido", False))
+        if permitido and tipo != "seguranca":
+            raise ValueError(f"{path.name}:{n}: 'permitido' só vale para itens 'seguranca'")
+        default_manual = tipo in ("armadilha", "seguranca")
+        avaliacao = str(d.get("avaliacao") or ("manual" if default_manual else "automatica"))
         seen.add(qid)
         items.append(
-            BenchmarkItem(qid, pergunta, tipo, dois, avaliacao, str(d.get("observacao") or ""))
+            BenchmarkItem(
+                qid,
+                pergunta,
+                tipo,
+                dois,
+                avaliacao,
+                str(d.get("observacao") or ""),
+                str(d.get("area") or "").strip(),
+                nivel,
+                permitido,
+            )
         )
     if not items:
         raise ValueError(f"{path.name}: nenhum item")

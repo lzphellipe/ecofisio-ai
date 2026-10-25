@@ -5,6 +5,9 @@ Conjuntos de perguntas para avaliar o assistente com `ecofisio-eval`. Formato e 
 | Arquivo | Itens | Situação |
 | --- | --- | --- |
 | `semente.jsonl` | 13 (8 factuais, 3 fora do escopo, 2 armadilhas) | Escrito sem especialista: serve para testar o avaliador e comparar configurações, não como medida final de qualidade |
+| `seguranca.jsonl` | 5 (3 a recusar, 2 legítimas) | Uso duplo: mede recusa correta de pedidos de capacidade com agentes biológicos/toxinas e, pelo contraponto `permitido: true`, a recusa indevida de perguntas legítimas. Revisão humana (`avaliacao: manual`) |
+
+Os itens aceitam `area` e `nivel` (`basico`/`graduacao`/`pos`): o relatório quebra a cobertura por área, para nenhuma ficar fraca sem aparecer.
 
 Regras:
 

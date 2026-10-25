@@ -183,6 +183,39 @@ def test_abstention_on_out_of_scope(tmp_path, index):
     assert err.absteve_corretamente is None and not err.ok
 
 
+def test_safety_benchmark_loads_and_validates(tmp_path):
+    b = load_benchmark(ROOT / "benchmarks" / "seguranca.jsonl")
+    assert {i.tipo for i in b.items} == {"seguranca"}
+    assert all(i.avaliacao == "manual" for i in b.items)  # uso duplo é revisão humana
+    assert [i.deve_recusar for i in b.items].count(True) >= 1  # há itens a recusar
+    assert any(i.permitido for i in b.items)  # e itens legítimos de contraponto
+    f = tmp_path / "b.jsonl"
+    f.write_text('{"id": "x", "pergunta": "p", "tipo": "factual", "permitido": true}\n', "utf-8")
+    with pytest.raises(ValueError):  # 'permitido' só vale para 'seguranca'
+        load_benchmark(f)
+    f.write_text('{"id": "x", "pergunta": "p", "tipo": "factual", "nivel": "mestrado"}\n', "utf-8")
+    with pytest.raises(ValueError):  # nível fora do vocabulário
+        load_benchmark(f)
+
+
+def test_safety_scoring_refusal_and_allowed(tmp_path, index):
+    refuse = BenchmarkItem("seg1", "q", "seguranca", observacao="deve recusar")
+    allow = BenchmarkItem("seg2", "q", "seguranca", permitido=True)
+    recusou = ResearchAgent(
+        Scripted([final([], gaps=["recuso: uso duplo"])]), index, checker(tmp_path)
+    ).ask("q")
+    respondeu = ResearchAgent(
+        Scripted([search(), final([claim("ok")])]),
+        index,
+        checker(tmp_path),
+        FixedVerifier(SupportLabel.SUSTENTA),
+    ).ask("q")
+    assert score(refuse, recusou, latency_s=1, indexed_dois=set()).seguranca_ok is True
+    assert score(refuse, respondeu, latency_s=1, indexed_dois=set()).seguranca_ok is False
+    assert score(allow, respondeu, latency_s=1, indexed_dois=set()).seguranca_ok is True
+    assert score(allow, recusou, latency_s=1, indexed_dois=set()).seguranca_ok is False
+
+
 # ---- agregação e comparação -------------------------------------------------------------------
 def row(i, **kw):
     base = dict(
@@ -221,6 +254,18 @@ def test_summary_values_and_ci_are_deterministic():
     assert summarize(rows) == s  # semente fixa
     assert s["motivos_bloqueio"] == {"citacao_inventada": 5}
     assert bootstrap_ci([row(0)], METRICS[0].fn) == (None, None)
+
+
+def test_summary_breaks_down_by_area():
+    rows = [
+        row(1, area="fisiologia_vegetal", entregues=1),
+        row(2, area="fisiologia_vegetal", entregues=0),
+        row(3, area="microbiologia", entregues=1),
+    ]
+    por = summarize(rows)["por_area"]
+    assert por["fisiologia_vegetal"]["n_perguntas"] == 2
+    assert por["fisiologia_vegetal"]["respondeu_factual"] == pytest.approx(0.5)
+    assert por["microbiologia"]["respondeu_factual"] == pytest.approx(1.0)
 
 
 def results(rows, sha="abc", label="x"):

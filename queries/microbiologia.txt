@@ -1,0 +1,5 @@
+# Microbiologia: fisiologia, metabolismo e ecologia microbiana (não patogênese aplicada).
+# Sintaxe do Europe PMC. Linhas com # são ignoradas; as demais são unidas com espaço.
+(bacterial OR microbial OR archaeal)
+AND (metabolism OR physiology OR "gene regulation" OR "microbial ecology" OR biofilm)
+AND OPEN_ACCESS:y

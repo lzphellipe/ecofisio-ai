@@ -1,8 +1,10 @@
 # ecofisio-ai
 
-Assistente de pesquisa em **Ecofisiologia e Bioquímica Vegetal**, de nível mestrado e doutorado: um LLM open-source ajustado para o domínio, que orquestra ferramentas de análise de dados, modelos mecanísticos e preditivos, e busca na literatura com evidência verificável.
+Assistente de pesquisa em **biologia** — de qualquer área (celular e molecular, bioquímica, genética, botânica e fisiologia vegetal, zoologia, microbiologia, imunologia, ecologia, biotecnologia) e de qualquer nível, do ensino médio ao doutorado. Projeto acadêmico, sem fins comerciais. Um LLM open-source ajustado que orquestra ferramentas de análise de dados, modelos mecanísticos e preditivos, e busca na literatura com evidência verificável. A ecofisiologia vegetal foi a primeira área com corpus (modelo FvCB, corpus de seca) e segue sendo uma das áreas cobertas.
 
-Plano completo do projeto: [IA para Ecofisiologia e Bioquímica Vegetal — Plano de Projeto](https://claude.ai/artifact/8Ksfbz9ji9rWvSwCDpZdbN).
+Para pedidos de uso duplo — capacidade prática de causar dano em larga escala com agentes biológicos ou toxinas — o assistente recusa, mesmo com justificativa acadêmica, e responde normalmente sobre conceitos, mecanismos, biossegurança e regulação.
+
+Plano completo do projeto: [IA de Pesquisa em Biologia — Plano de Projeto](https://claude.ai/artifact/8Ksfbz9ji9rWvSwCDpZdbN).
 
 ## Estado atual (fase 1 — fundação)
 
