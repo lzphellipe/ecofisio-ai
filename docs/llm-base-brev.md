@@ -1,6 +1,8 @@
 # LLM base no Brev (NVIDIA L4)
 
-Linha de base da fase 1: Qwen 3 8B sem ajuste, servido pelo vLLM, respondendo com a busca na literatura. É a referência que o modelo ajustado da fase 3 precisa superar.
+Linha de base da fase 1: Qwen 3 8B sem ajuste, servido pelo vLLM, respondendo com a busca na literatura. É a referência que o modelo ajustado da fase 3 precisa superar. O assistente é generalista em biologia, então as primeiras perguntas e o benchmark devem variar de área e de nível, não só a parte vegetal que já tem corpus.
+
+**Custo (confira antes de ligar).** L4 ligada ~US$0,85–0,90/h; uma sessão de 2–3 h (subir + baixar pesos + algumas avaliações) sai por ~US$2–3. Disco de 100 GB é cobrado mesmo parada (~US$0,17/GB·mês no SSD do GCP ≈ US$17/mês se deixar). Pare a instância ao fim; se não for usar por semanas, apague-a (o modelo rebaixa em minutos).
 
 ## Instância
 
@@ -16,22 +18,17 @@ Linha de base da fase 1: Qwen 3 8B sem ajuste, servido pelo vLLM, respondendo co
 
 ## 1. Na instância: subir o servidor
 
+Copie `scripts/brev_serve.sh` para a instância (ou cole o conteúdo) e rode:
+
 ```bash
-python -m venv ~/vllm && source ~/vllm/bin/activate
-pip install "vllm>=0.9.0"
-
-# chave que protege o servidor; guarde-a, ela vai para o seu computador
-export VLLM_API_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
-echo "$VLLM_API_KEY"
-
-vllm serve Qwen/Qwen3-8B \
-  --enable-auto-tool-choice --tool-call-parser hermes \
-  --max-model-len 16384 --gpu-memory-utilization 0.90 \
-  --host 127.0.0.1 --port 8000 --api-key "$VLLM_API_KEY"
+bash brev_serve.sh                 # Qwen/Qwen3-8B (padrão)
+# bash brev_serve.sh Qwen/Qwen3-4B # modelo menor, se faltar VRAM
 ```
 
+O script cria o venv, instala o vLLM, gera uma vez a chave do servidor (guardada em `~/vllm_api_key.txt`) e sobe o `vllm serve`. Ele imprime a chave: **copie-a para o seu computador** (vira `ECOFISIO_LLM_KEY`). Detalhes:
+
 - `--enable-auto-tool-choice --tool-call-parser hermes`: chamada de ferramentas do Qwen 3, como na [documentação do Qwen para vLLM](https://qwen.readthedocs.io/en/v3.0/deployment/vllm.html).
-- `--max-model-len 16384`: estimativa a confirmar. Qwen 3 8B usa ~0,14 MB de cache por token (36 camadas × 8 cabeças KV × 128 × 2 × BF16), então ~5 GB livres comportam ~35 mil tokens. Se o vLLM reclamar de memória, reduza para 8192.
+- Contexto `16384`: estimativa a confirmar. Qwen 3 8B usa ~0,14 MB de cache por token, então ~5 GB livres comportam ~35 mil tokens. Se o vLLM reclamar de memória, rode com `VLLM_MAX_MODEL_LEN=8192 bash brev_serve.sh`.
 - `--host 127.0.0.1`: o servidor só escuta dentro da instância. **Não abra a porta 8000 para a internet**; o acesso é pelo túnel SSH abaixo.
 
 A primeira execução baixa ~16 GB de pesos do Hugging Face.
