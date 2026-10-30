@@ -29,6 +29,7 @@ ecofisio-corpus = "ecofisio.literature.corpus:main"
 ecofisio-ask = "ecofisio.agent.cli:main"
 ecofisio-eval = "ecofisio.eval.cli:main"
 ecofisio-busca = "ecofisio.rag.cli:main"
+ecofisio-dataset = "ecofisio.dataset.cli:main"
 
 [tool.scikit-build]
 minimum-version = "build-system.requires"

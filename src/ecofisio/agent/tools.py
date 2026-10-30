@@ -21,8 +21,8 @@ SEARCH_TOOL: dict[str, Any] = {
     "function": {
         "name": "buscar_literatura",
         "description": (
-            "Busca trechos de artigos científicos abertos sobre ecofisiologia e bioquímica "
-            "vegetal. Escreva a consulta em INGLÊS (o corpus é em inglês), com termos técnicos. "
+            "Busca trechos de artigos científicos abertos de biologia (qualquer área). "
+            "Escreva a consulta em INGLÊS (o corpus é em inglês), com termos técnicos. "
             "Cada resultado traz um id (ex.: T3) para citar na resposta final."
         ),
         "parameters": {
