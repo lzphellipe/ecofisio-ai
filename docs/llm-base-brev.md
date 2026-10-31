@@ -16,6 +16,12 @@ Linha de base da fase 1: Qwen 3 8B sem ajuste, servido pelo vLLM, respondendo co
 
 **Pare a instância ao fim de cada sessão.** Parada, ela só cobra o disco. Se não for usar por semanas, apague a instância: o modelo baixa de novo em minutos.
 
+## 0. Ao criar a instância: modo e script de configuração
+
+Escolha **Modo VM** (inclui Python, CUDA e Docker, dá shell completo e disco persistente — é o que estes scripts assumem). Jupyter é opcional: ligue se for usar notebooks, senão deixe desligado (o acesso é por SSH).
+
+No campo **"Script de Configuração"**, cole o conteúdo de [`scripts/brev_setup.sh`](../scripts/brev_setup.sh). Ele roda uma vez quando a VM fica pronta e deixa o ambiente instalado (deps, repo em `/opt/ecofisio-ai`, venv e vLLM). Ele **não** sobe o servidor nem treina — isso você dispara depois por SSH. Se o repositório for privado, o clone falha e o script segue só com o venv; nesse caso suba o código manualmente ou use um token de deploy.
+
 ## 1. Na instância: subir o servidor
 
 Copie `scripts/brev_serve.sh` para a instância (ou cole o conteúdo) e rode:
