@@ -22,10 +22,13 @@ LOGIN_USER="${ECOFISIO_USER:-ubuntu}"
 log() { echo "[ecofisio-setup] $*"; }
 SUDO=""; [[ $EUID -ne 0 ]] && SUDO="sudo"
 
-log "instalando dependências de sistema"
+log "instalando dependências de sistema (inclui Python 3.11; o projeto exige >= 3.11)"
 export DEBIAN_FRONTEND=noninteractive
 $SUDO apt-get update -y
-$SUDO apt-get install -y git build-essential python3-venv python3-pip
+$SUDO apt-get install -y software-properties-common
+$SUDO add-apt-repository -y ppa:deadsnakes/ppa
+$SUDO apt-get update -y
+$SUDO apt-get install -y git build-essential python3.11 python3.11-venv python3.11-dev python3-pip
 
 log "preparando $DEST"
 $SUDO mkdir -p "$DEST"
@@ -43,8 +46,8 @@ else
   git -C "$DEST" pull --ff-only || true
 fi
 
-log "criando venv e instalando (cmake/ninja via pip garantem cmake >= 3.26 para o kernel)"
-python3 -m venv "$DEST/.venv"
+log "criando venv com Python 3.11 (cmake/ninja via pip garantem cmake >= 3.26 para o kernel)"
+python3.11 -m venv "$DEST/.venv"
 "$DEST/.venv/bin/pip" install --upgrade pip
 "$DEST/.venv/bin/pip" install "cmake>=3.26" ninja
 if [[ -f "$DEST/pyproject.toml" ]]; then
