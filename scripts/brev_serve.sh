@@ -12,7 +12,13 @@ MODEL="${1:-Qwen/Qwen3-8B}"
 MAX_LEN="${VLLM_MAX_MODEL_LEN:-16384}"
 PORT="${VLLM_PORT:-8000}"
 
-python -m venv ~/vllm
+# A VM do Brev tem o driver NVIDIA mas não o CUDA toolkit (nvcc). O amostrador FlashInfer
+# compila um kernel em JIT no warmup e falha sem nvcc; desligamos por padrão (cai no amostrador
+# nativo do PyTorch, que não precisa de nvcc). Exporte =1 para forçar o FlashInfer, se instalar
+# o toolkit depois.
+export VLLM_USE_FLASHINFER_SAMPLER="${VLLM_USE_FLASHINFER_SAMPLER:-0}"
+
+python3.11 -m venv ~/vllm
 source ~/vllm/bin/activate
 pip install --upgrade pip
 pip install "vllm>=0.9.0"
