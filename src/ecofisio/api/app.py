@@ -187,6 +187,24 @@ def create_app(
             raise HTTPException(404, "não encontrado")
         return json.loads(f.read_text("utf-8"))
 
+    @app.get("/buscar")
+    def buscar(
+        q: str, k: int = 8, so_primarios: bool = False, _: str = Depends(auth)
+    ) -> dict[str, Any]:
+        """Busca direta no corpus, sem LLM (como o ecofisio-busca): trechos para o usuário ler."""
+        q = q.strip()
+        if not q:
+            raise HTTPException(400, "consulta vazia")
+        ag: ResearchAgent = app.state.agent
+        k = max(1, min(k, 20))
+        mode = "hybrid" if ag.index.embedder else "lexical"
+        hits = ag.index.search(q, k=k * 5 if so_primarios else k, mode=mode)
+        if so_primarios:
+            hits = [h for h in hits if h.passage.primary_evidence][:k]
+        else:
+            hits = hits[:k]
+        return {"consulta": q, "resultados": [h.as_tool_result() for h in hits]}
+
     return app
 
 

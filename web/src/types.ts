@@ -53,3 +53,18 @@ export interface Turno {
   resposta?: Resposta;
   erro?: string;
 }
+
+// Resultado da busca direta no corpus (endpoint /buscar).
+export interface Passagem {
+  doi: string;
+  title: string;
+  year: number | null;
+  section: string;
+  license: string;
+  article_type: string;
+  primary_evidence: boolean;
+  text: string;
+  score: number;
+}
+
+export type Secao = "conversa" | "procurar" | "historico" | "config";

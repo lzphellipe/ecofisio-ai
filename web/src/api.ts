@@ -1,4 +1,4 @@
-import type { ItemHistorico, Resposta } from "./types";
+import type { ItemHistorico, Passagem, Resposta } from "./types";
 
 const BASE = (import.meta.env.VITE_API_URL ?? "http://localhost:8080").replace(/\/$/, "");
 const AUTH_KEY = "ecofisio.auth";
@@ -71,4 +71,9 @@ export const api = {
     pedir<Resposta>("/perguntar", { method: "POST", body: JSON.stringify({ pergunta }) }),
   historico: () => pedir<ItemHistorico[]>("/historico"),
   item: (id: string) => pedir<Resposta>(`/historico/${encodeURIComponent(id)}`),
+  buscar: (q: string, soPrimarios: boolean) => {
+    const p = new URLSearchParams({ q, k: "10" });
+    if (soPrimarios) p.set("so_primarios", "true");
+    return pedir<{ consulta: string; resultados: Passagem[] }>(`/buscar?${p.toString()}`);
+  },
 };

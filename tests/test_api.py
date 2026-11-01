@@ -91,6 +91,17 @@ def test_perguntar_blocks_invented_citation(tmp_path):
     assert data["entregues"] == [] and data["bloqueadas"]  # T99 não existe → bloqueada
 
 
+def test_buscar_corpus(tmp_path):
+    agent = make_agent(tmp_path, [])
+    client = TestClient(create_app(agent, runs_dir=tmp_path / "runs", users={}))
+    r = client.get("/buscar", params={"q": "stomatal conductance drought", "k": 3})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["consulta"] == "stomatal conductance drought"
+    assert data["resultados"] and data["resultados"][0]["doi"] == DOI
+    assert client.get("/buscar", params={"q": "  "}).status_code == 400
+
+
 def test_health_and_validation(tmp_path):
     agent = make_agent(tmp_path, [])
     client = TestClient(create_app(agent, runs_dir=tmp_path / "runs", users={}))
