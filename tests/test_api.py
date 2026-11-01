@@ -117,6 +117,52 @@ def test_history_item_rejects_path_traversal(tmp_path):
     assert client.get("/historico/nao-existe").status_code == 404
 
 
+def _pergunta_id(client):
+    return client.post("/perguntar", json={"pergunta": "q?"}).json()["id"]
+
+
+def test_projetos_agrupam_perguntas(tmp_path):
+    agent = make_agent(tmp_path, [search(), final([claim()])])
+    client = TestClient(create_app(agent, runs_dir=tmp_path / "runs", users={}))
+    pid_resp = client.post("/projetos", json={"nome": "Tese cap. 2"}).json()
+    pid = pid_resp["id"]
+    assert pid_resp["nome"] == "Tese cap. 2"
+
+    rid = _pergunta_id(client)
+    add = client.post(f"/projetos/{pid}/perguntas", json={"pergunta_id": rid})
+    assert add.status_code == 200 and add.json()["n"] == 1
+
+    proj = client.get(f"/projetos/{pid}").json()
+    assert len(proj["perguntas"]) == 1 and proj["perguntas"][0]["id"] == rid
+    assert client.get("/projetos").json()[0]["n"] == 1
+
+    # pergunta inexistente e projeto inexistente
+    assert client.post(f"/projetos/{pid}/perguntas", json={"pergunta_id": "nao"}).status_code == 404
+    assert client.get("/projetos/xxxx").status_code == 404
+    assert client.delete(f"/projetos/{pid}").json()["ok"] is True
+    assert client.get("/projetos").json() == []
+
+
+def test_artefatos_salvar_e_excluir(tmp_path):
+    agent = make_agent(tmp_path, [search(), final([claim()])])
+    client = TestClient(create_app(agent, runs_dir=tmp_path / "runs", users={}))
+    rid = _pergunta_id(client)
+    art = client.post("/artefatos", json={"pergunta_id": rid, "nome": "Rubisco"}).json()
+    assert art["nome"] == "Rubisco" and art["pergunta_id"] == rid
+    lista = client.get("/artefatos").json()
+    assert len(lista) == 1 and lista[0]["existe"] is True and lista[0]["pergunta"] == "q?"
+    assert client.post("/artefatos", json={"pergunta_id": "nao"}).status_code == 404
+    assert client.delete(f"/artefatos/{art['id']}").json()["ok"] is True
+    assert client.get("/artefatos").json() == []
+
+
+def test_perguntar_grava_id_no_rastro(tmp_path):
+    agent = make_agent(tmp_path, [search(), final([claim()])])
+    client = TestClient(create_app(agent, runs_dir=tmp_path / "runs", users={}))
+    rid = _pergunta_id(client)
+    assert client.get(f"/historico/{rid}").json()["id"] == rid
+
+
 def test_login_required_when_users_set(tmp_path):
     agent = make_agent(tmp_path, [search(), final([claim()])])
     app = create_app(agent, runs_dir=tmp_path / "runs", users={"luiz": "s3nha"})

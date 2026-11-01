@@ -67,4 +67,30 @@ export interface Passagem {
   score: number;
 }
 
-export type Secao = "conversa" | "procurar" | "historico" | "config";
+export type Secao =
+  | "conversa"
+  | "procurar"
+  | "historico"
+  | "projetos"
+  | "artefatos"
+  | "config";
+
+export interface Projeto {
+  id: string;
+  nome: string;
+  criado_em: string;
+  n: number;
+}
+
+export interface ProjetoDetalhe extends Omit<Projeto, "n"> {
+  perguntas: ItemHistorico[];
+}
+
+export interface Artefato {
+  id: string;
+  pergunta_id: string;
+  nome: string;
+  criado_em: string;
+  pergunta?: string | null;
+  existe?: boolean;
+}

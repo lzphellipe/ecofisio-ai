@@ -36,6 +36,7 @@ from pydantic import BaseModel, Field
 
 from ecofisio.agent.llm import LLMError, OpenAICompatibleChat
 from ecofisio.agent.research import AgentError, ResearchAgent
+from ecofisio.api.store import AppStore
 from ecofisio.evidence.retraction import CrossrefClient, RetractionChecker, RetractionWatchIndex
 from ecofisio.rag.index import LiteratureIndex
 
@@ -98,10 +99,24 @@ class Pergunta(BaseModel):
     pergunta: str = Field(min_length=1, max_length=2000)
 
 
+class NovoProjeto(BaseModel):
+    nome: str = Field(min_length=1, max_length=120)
+
+
+class AddPergunta(BaseModel):
+    pergunta_id: str = Field(min_length=1, max_length=64)
+
+
+class NovoArtefato(BaseModel):
+    pergunta_id: str = Field(min_length=1, max_length=64)
+    nome: str = Field(default="", max_length=120)
+
+
 def create_app(
     agent: ResearchAgent | None = None,
     *,
     runs_dir: Path | None = None,
+    store: AppStore | None = None,
     users: dict[str, str] | None = None,
     cors_origins: list[str] | None = None,
 ) -> FastAPI:
@@ -120,10 +135,29 @@ def create_app(
         CORSMiddleware,
         allow_origins=origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["*"],
     )
     app.state.agent = agent or build_agent_from_env()
+    loja = store or AppStore(Path(os.environ.get("ECOFISIO_STORE", "data/app")))
+
+    def resumo_run(rid: str) -> dict[str, Any] | None:
+        """Item de histórico (id, pergunta, resumo, contagens) a partir do rastro, ou None."""
+        f = runs / f"{rid}.json"
+        if not _RUN_ID.match(rid) or not f.is_file():
+            return None
+        try:
+            d = json.loads(f.read_text("utf-8"))
+        except (ValueError, OSError):
+            return None
+        return {
+            "id": rid,
+            "pergunta": d.get("pergunta"),
+            "criado_em": d.get("criado_em"),
+            "resumo": d.get("resumo"),
+            "entregues": len(d.get("entregues") or []),
+            "bloqueadas": len(d.get("bloqueadas") or []),
+        }
 
     security = HTTPBasic(auto_error=False)
 
@@ -154,8 +188,8 @@ def create_app(
         data = answer.to_dict()
         runs.mkdir(parents=True, exist_ok=True)
         rid = f"{datetime.now(UTC):%Y%m%dT%H%M%S%fZ}"
+        data["id"] = rid  # grava o id dentro do rastro também, para o histórico devolvê-lo
         (runs / f"{rid}.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), "utf-8")
-        data["id"] = rid
         return data
 
     @app.get("/historico")
@@ -185,7 +219,9 @@ def create_app(
         f = runs / f"{rid}.json"
         if not f.is_file():
             raise HTTPException(404, "não encontrado")
-        return json.loads(f.read_text("utf-8"))
+        d = json.loads(f.read_text("utf-8"))
+        d.setdefault("id", rid)  # rastros antigos não gravavam o id
+        return d
 
     @app.get("/buscar")
     def buscar(
@@ -204,6 +240,69 @@ def create_app(
         else:
             hits = hits[:k]
         return {"consulta": q, "resultados": [h.as_tool_result() for h in hits]}
+
+    # ---- projetos (agrupar perguntas por tema) ----
+    @app.get("/projetos")
+    def listar_projetos(_: str = Depends(auth)) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": p["id"],
+                "nome": p["nome"],
+                "criado_em": p["criado_em"],
+                "n": len(p["perguntas"]),
+            }
+            for p in loja.projetos()
+        ]
+
+    @app.post("/projetos")
+    def criar_projeto(req: NovoProjeto, _: str = Depends(auth)) -> dict[str, Any]:
+        return loja.criar_projeto(req.nome.strip())
+
+    @app.get("/projetos/{pid}")
+    def obter_projeto(pid: str, _: str = Depends(auth)) -> dict[str, Any]:
+        proj = loja.projeto(pid)
+        if proj is None:
+            raise HTTPException(404, "projeto não encontrado")
+        perguntas = [r for rid in proj["perguntas"] if (r := resumo_run(rid)) is not None]
+        return {**proj, "perguntas": perguntas}
+
+    @app.delete("/projetos/{pid}")
+    def excluir_projeto(pid: str, _: str = Depends(auth)) -> dict[str, bool]:
+        if not loja.excluir_projeto(pid):
+            raise HTTPException(404, "projeto não encontrado")
+        return {"ok": True}
+
+    @app.post("/projetos/{pid}/perguntas")
+    def add_pergunta(pid: str, req: AddPergunta, _: str = Depends(auth)) -> dict[str, Any]:
+        if resumo_run(req.pergunta_id) is None:
+            raise HTTPException(404, "pergunta não encontrada")
+        proj = loja.adicionar_pergunta(pid, req.pergunta_id)
+        if proj is None:
+            raise HTTPException(404, "projeto não encontrado")
+        return {"id": proj["id"], "nome": proj["nome"], "n": len(proj["perguntas"])}
+
+    # ---- artefatos (respostas salvas) ----
+    @app.get("/artefatos")
+    def listar_artefatos(_: str = Depends(auth)) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for a in loja.artefatos():
+            r = resumo_run(a["pergunta_id"])
+            out.append({**a, "pergunta": r["pergunta"] if r else None, "existe": r is not None})
+        return out
+
+    @app.post("/artefatos")
+    def criar_artefato(req: NovoArtefato, _: str = Depends(auth)) -> dict[str, Any]:
+        r = resumo_run(req.pergunta_id)
+        if r is None:
+            raise HTTPException(404, "pergunta não encontrada")
+        nome = req.nome.strip() or (r["pergunta"] or "Artefato")
+        return loja.criar_artefato(req.pergunta_id, nome)
+
+    @app.delete("/artefatos/{aid}")
+    def excluir_artefato(aid: str, _: str = Depends(auth)) -> dict[str, bool]:
+        if not loja.excluir_artefato(aid):
+            raise HTTPException(404, "artefato não encontrado")
+        return {"ok": True}
 
     return app
 

@@ -1,4 +1,4 @@
-import type { ItemHistorico, Passagem, Resposta } from "./types";
+import type { Artefato, ItemHistorico, Passagem, Projeto, ProjetoDetalhe, Resposta } from "./types";
 
 const BASE = (import.meta.env.VITE_API_URL ?? "http://localhost:8080").replace(/\/$/, "");
 const AUTH_KEY = "ecofisio.auth";
@@ -76,4 +76,23 @@ export const api = {
     if (soPrimarios) p.set("so_primarios", "true");
     return pedir<{ consulta: string; resultados: Passagem[] }>(`/buscar?${p.toString()}`);
   },
+  projetos: () => pedir<Projeto[]>("/projetos"),
+  criarProjeto: (nome: string) =>
+    pedir<Projeto>("/projetos", { method: "POST", body: JSON.stringify({ nome }) }),
+  projeto: (id: string) => pedir<ProjetoDetalhe>(`/projetos/${encodeURIComponent(id)}`),
+  excluirProjeto: (id: string) =>
+    pedir<{ ok: boolean }>(`/projetos/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  addAoProjeto: (id: string, perguntaId: string) =>
+    pedir<{ id: string; nome: string; n: number }>(
+      `/projetos/${encodeURIComponent(id)}/perguntas`,
+      { method: "POST", body: JSON.stringify({ pergunta_id: perguntaId }) },
+    ),
+  artefatos: () => pedir<Artefato[]>("/artefatos"),
+  salvarArtefato: (perguntaId: string, nome: string) =>
+    pedir<Artefato>("/artefatos", {
+      method: "POST",
+      body: JSON.stringify({ pergunta_id: perguntaId, nome }),
+    }),
+  excluirArtefato: (id: string) =>
+    pedir<{ ok: boolean }>(`/artefatos/${encodeURIComponent(id)}`, { method: "DELETE" }),
 };

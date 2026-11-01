@@ -7,7 +7,17 @@ import {
   salvarCredencial,
   temCredencial,
 } from "./api";
-import type { ItemHistorico, Passagem, Resposta, Secao, Turno } from "./types";
+import { baixarMarkdown } from "./exportar";
+import type {
+  Artefato,
+  ItemHistorico,
+  Passagem,
+  Projeto,
+  ProjetoDetalhe,
+  Resposta,
+  Secao,
+  Turno,
+} from "./types";
 
 type Sessao = "verificando" | "logado" | "deslogado";
 type Tema = "auto" | "claro" | "escuro";
@@ -40,6 +50,7 @@ export default function App() {
   const [secao, setSecao] = useState<Secao>("conversa");
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [historico, setHistorico] = useState<ItemHistorico[]>([]);
+  const [projetos, setProjetos] = useState<Projeto[]>([]);
   const [ocupado, setOcupado] = useState(false);
   const [tema, setTema] = useState<Tema>(lerTema);
 
@@ -62,12 +73,23 @@ export default function App() {
     }
   }, []);
 
+  const carregarProjetos = useCallback(async () => {
+    try {
+      setProjetos(await api.projetos());
+    } catch {
+      /* secundário */
+    }
+  }, []);
+
   useEffect(() => {
     checarSessao();
   }, [checarSessao]);
   useEffect(() => {
-    if (sessao === "logado") carregarHistorico();
-  }, [sessao, carregarHistorico]);
+    if (sessao === "logado") {
+      carregarHistorico();
+      carregarProjetos();
+    }
+  }, [sessao, carregarHistorico, carregarProjetos]);
 
   async function perguntar(pergunta: string) {
     setTurnos((t) => [...t, { pergunta }]);
@@ -90,9 +112,16 @@ export default function App() {
     }
   }
 
-  async function abrirDoHistorico(resposta: Resposta) {
+  async function abrir(resposta: Resposta) {
     setTurnos([{ pergunta: resposta.pergunta, resposta }]);
     setSecao("conversa");
+  }
+  async function abrirPorId(id: string) {
+    try {
+      abrir(await api.item(id));
+    } catch {
+      /* ignore */
+    }
   }
 
   if (sessao === "verificando") return <div className="boot">Carregando…</div>;
@@ -110,12 +139,24 @@ export default function App() {
       />
       <main className="conteudo">
         {secao === "conversa" && (
-          <Conversa turnos={turnos} ocupado={ocupado} aoEnviar={perguntar} />
+          <Conversa
+            turnos={turnos}
+            ocupado={ocupado}
+            aoEnviar={perguntar}
+            projetos={projetos}
+            aoMudarProjetos={carregarProjetos}
+          />
         )}
         {secao === "procurar" && <Procurar />}
-        {secao === "historico" && (
-          <Historico itens={historico} aoAbrir={abrirDoHistorico} />
+        {secao === "historico" && <Historico itens={historico} aoAbrir={abrir} />}
+        {secao === "projetos" && (
+          <Projetos
+            projetos={projetos}
+            aoMudar={carregarProjetos}
+            aoAbrirPergunta={abrirPorId}
+          />
         )}
+        {secao === "artefatos" && <Artefatos aoAbrirPergunta={abrirPorId} />}
         {secao === "config" && (
           <Config
             tema={tema}
@@ -156,13 +197,9 @@ function NavRail({
           Nova pergunta
         </button>
         <NavItem atual={secao} alvo="procurar" ir={irPara} icone="lupa" rotulo="Procurar" />
-        <NavItem
-          atual={secao}
-          alvo="historico"
-          ir={irPara}
-          icone="relogio"
-          rotulo="Histórico"
-        />
+        <NavItem atual={secao} alvo="projetos" ir={irPara} icone="pasta" rotulo="Projetos" />
+        <NavItem atual={secao} alvo="artefatos" ir={irPara} icone="estrela" rotulo="Artefatos" />
+        <NavItem atual={secao} alvo="historico" ir={irPara} icone="relogio" rotulo="Histórico" />
         <NavItem
           atual={secao}
           alvo="config"
@@ -205,10 +242,14 @@ function Conversa({
   turnos,
   ocupado,
   aoEnviar,
+  projetos,
+  aoMudarProjetos,
 }: {
   turnos: Turno[];
   ocupado: boolean;
   aoEnviar: (p: string) => void;
+  projetos: Projeto[];
+  aoMudarProjetos: () => void;
 }) {
   const fim = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -222,6 +263,13 @@ function Conversa({
           <div key={i} className="turno">
             <div className="pergunta-bolha">{t.pergunta}</div>
             {t.resposta && <Finding resposta={t.resposta} />}
+            {t.resposta?.id && (
+              <AcoesResposta
+                resposta={t.resposta}
+                projetos={projetos}
+                aoMudarProjetos={aoMudarProjetos}
+              />
+            )}
             {t.erro && <div className="turno-erro">{t.erro}</div>}
             {!t.resposta && !t.erro && i === turnos.length - 1 && ocupado && <Pensando />}
           </div>
@@ -229,6 +277,67 @@ function Conversa({
         <div ref={fim} />
       </div>
       <Composer ocupado={ocupado} aoEnviar={aoEnviar} />
+    </div>
+  );
+}
+
+function AcoesResposta({
+  resposta,
+  projetos,
+  aoMudarProjetos,
+}: {
+  resposta: Resposta;
+  projetos: Projeto[];
+  aoMudarProjetos: () => void;
+}) {
+  const [aviso, setAviso] = useState("");
+  const id = resposta.id!;
+
+  async function salvar() {
+    try {
+      await api.salvarArtefato(id, resposta.pergunta);
+      setAviso("Salvo nos artefatos.");
+    } catch {
+      setAviso("Não consegui salvar.");
+    }
+  }
+  async function adicionar(pid: string) {
+    if (!pid) return;
+    try {
+      await api.addAoProjeto(pid, id);
+      aoMudarProjetos();
+      setAviso(`Adicionada ao projeto “${projetos.find((p) => p.id === pid)?.nome ?? ""}”.`);
+    } catch {
+      setAviso("Não consegui adicionar ao projeto.");
+    }
+  }
+
+  return (
+    <div className="acoes">
+      <button className="acao" onClick={salvar}>
+        Salvar como artefato
+      </button>
+      <button className="acao" onClick={() => baixarMarkdown(resposta)}>
+        Exportar .md
+      </button>
+      {projetos.length > 0 ? (
+        <select
+          className="acao acao-sel"
+          value=""
+          onChange={(e) => adicionar(e.target.value)}
+          aria-label="Adicionar a projeto"
+        >
+          <option value="">Adicionar a projeto…</option>
+          {projetos.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.nome}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span className="acao-nota">Crie um projeto para agrupar perguntas</span>
+      )}
+      {aviso && <span className="acao-aviso">{aviso}</span>}
     </div>
   );
 }
@@ -431,6 +540,164 @@ function Historico({
   );
 }
 
+/* ---------- projetos ---------- */
+function Projetos({
+  projetos,
+  aoMudar,
+  aoAbrirPergunta,
+}: {
+  projetos: Projeto[];
+  aoMudar: () => void;
+  aoAbrirPergunta: (id: string) => void;
+}) {
+  const [nome, setNome] = useState("");
+  const [sel, setSel] = useState<ProjetoDetalhe | null>(null);
+
+  async function criar(e: React.FormEvent) {
+    e.preventDefault();
+    if (!nome.trim()) return;
+    await api.criarProjeto(nome.trim());
+    setNome("");
+    aoMudar();
+  }
+  async function abrir(id: string) {
+    try {
+      setSel(await api.projeto(id));
+    } catch {
+      /* ignore */
+    }
+  }
+  async function excluir(id: string) {
+    await api.excluirProjeto(id);
+    if (sel?.id === id) setSel(null);
+    aoMudar();
+  }
+
+  return (
+    <div className="pagina">
+      <div className="pagina-coluna">
+        <h2 className="pagina-titulo">Projetos</h2>
+        <p className="pagina-sub">
+          Agrupe perguntas por tema. Nas respostas, use “Adicionar a projeto” para incluí-las aqui.
+        </p>
+        <form className="busca-form" onSubmit={criar}>
+          <input
+            className="busca-input"
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            placeholder="Nome do projeto (ex.: Tese — capítulo 2)"
+          />
+          <button className="enviar" disabled={!nome.trim()}>
+            Criar
+          </button>
+        </form>
+
+        {projetos.length === 0 && <p className="pagina-sub">Nenhum projeto ainda.</p>}
+        <ul className="lista-proj">
+          {projetos.map((p) => (
+            <li key={p.id} className={`proj${sel?.id === p.id ? " proj-aberto" : ""}`}>
+              <button className="proj-cab" onClick={() => abrir(p.id)}>
+                <span className="proj-nome">{p.nome}</span>
+                <span className="meta">
+                  {p.n} {p.n === 1 ? "pergunta" : "perguntas"}
+                </span>
+              </button>
+              <button className="proj-excluir" onClick={() => excluir(p.id)} title="Excluir">
+                excluir
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        {sel && (
+          <section className="proj-detalhe">
+            <h3 className="bloco-titulo">{sel.nome}</h3>
+            {sel.perguntas.length === 0 && (
+              <p className="pagina-sub">Sem perguntas ainda neste projeto.</p>
+            )}
+            <ul className="lista-hist">
+              {sel.perguntas.map((h) => (
+                <li key={h.id}>
+                  <button className="hist-linha" onClick={() => aoAbrirPergunta(h.id)}>
+                    <span className="hist-linha-q">{h.pergunta}</span>
+                    {h.resumo && <span className="hist-linha-r">{h.resumo}</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- artefatos ---------- */
+function Artefatos({ aoAbrirPergunta }: { aoAbrirPergunta: (id: string) => void }) {
+  const [itens, setItens] = useState<Artefato[] | null>(null);
+  useEffect(() => {
+    api.artefatos().then(setItens).catch(() => setItens([]));
+  }, []);
+
+  async function excluir(id: string) {
+    await api.excluirArtefato(id);
+    setItens((i) => i?.filter((x) => x.id !== id) ?? null);
+  }
+  async function exportar(perguntaId: string) {
+    try {
+      baixarMarkdown(await api.item(perguntaId));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return (
+    <div className="pagina">
+      <div className="pagina-coluna">
+        <h2 className="pagina-titulo">Artefatos</h2>
+        <p className="pagina-sub">
+          Respostas que você salvou. Abra para rever, ou exporte em Markdown para anexar num texto.
+        </p>
+        {itens && itens.length === 0 && (
+          <p className="pagina-sub">Nada salvo ainda. Numa resposta, use “Salvar como artefato”.</p>
+        )}
+        <ul className="lista-hist">
+          {itens?.map((a) => (
+            <li key={a.id}>
+              <div className="artefato">
+                <div className="artefato-info">
+                  <span className="hist-linha-q">{a.nome}</span>
+                  {a.pergunta && a.pergunta !== a.nome && (
+                    <span className="hist-linha-r">{a.pergunta}</span>
+                  )}
+                  {a.existe === false && (
+                    <span className="artefato-sumiu">rastro removido — indisponível</span>
+                  )}
+                </div>
+                <div className="artefato-acoes">
+                  {a.existe !== false && (
+                    <>
+                      <button className="acao" onClick={() => aoAbrirPergunta(a.pergunta_id)}>
+                        Abrir
+                      </button>
+                      <button className="acao" onClick={() => exportar(a.pergunta_id)}>
+                        Exportar .md
+                      </button>
+                    </>
+                  )}
+                  <button className="acao acao-apagar" onClick={() => excluir(a.id)}>
+                    Excluir
+                  </button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- personalização ---------- */
 function Config({
   tema,
@@ -553,7 +820,7 @@ function Marca() {
   );
 }
 
-type IconeNome = "mais" | "lupa" | "relogio" | "ajustes";
+type IconeNome = "mais" | "lupa" | "relogio" | "ajustes" | "pasta" | "estrela";
 
 function Icone({ nome }: { nome: IconeNome }) {
   const p: Record<IconeNome, JSX.Element> = {
@@ -578,6 +845,8 @@ function Icone({ nome }: { nome: IconeNome }) {
         <circle cx="7" cy="14" r="1.6" />
       </>
     ),
+    pasta: <path d="M3 6.5 a1 1 0 0 1 1-1 h3 l1.5 2 h6 a1 1 0 0 1 1 1 v5 a1 1 0 0 1-1 1 H4 a1 1 0 0 1-1-1 Z" />,
+    estrela: <path d="M6 4 h8 a1 1 0 0 1 1 1 v11 l-5-3 l-5 3 V5 a1 1 0 0 1 1-1 Z" />,
   };
   return (
     <svg className="icone" viewBox="0 0 20 20" aria-hidden="true">
