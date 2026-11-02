@@ -35,6 +35,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from ecofisio.agent.especialistas import especialistas, foco_de
 from ecofisio.agent.llm import LLMError, OpenAICompatibleChat
 from ecofisio.agent.providers import provedores
 from ecofisio.agent.research import AgentError, ResearchAgent
@@ -99,6 +100,7 @@ def _parse_users(raw: str | None) -> dict[str, str]:
 class Pergunta(BaseModel):
     pergunta: str = Field(min_length=1, max_length=2000)
     modelo: str | None = None  # id do provedor (qwen, gemini, openai); padrão: o primeiro
+    especialista: str | None = None  # lente de foco (celular, bioquimica, ...); padrão: geral
 
 
 class NovoProjeto(BaseModel):
@@ -198,6 +200,10 @@ def create_app(
         ]
         return {"padrao": app.state.modelo_padrao, "modelos": lista}
 
+    @app.get("/especialistas")
+    def listar_especialistas(_: str = Depends(auth)) -> list[dict[str, str]]:
+        return [{"id": e.id, "label": e.label} for e in especialistas()]
+
     @app.post("/perguntar")
     def perguntar(req: Pergunta, _: str = Depends(auth)) -> dict[str, Any]:
         mid = req.modelo or app.state.modelo_padrao
@@ -205,7 +211,7 @@ def create_app(
         if agente is None:
             raise HTTPException(400, f"modelo desconhecido: {mid}")
         try:
-            answer = agente.ask(req.pergunta)
+            answer = agente.ask(req.pergunta, foco=foco_de(req.especialista))
         except (LLMError, AgentError) as exc:
             raise HTTPException(502, f"erro do modelo: {exc}") from exc
         except ValueError as exc:

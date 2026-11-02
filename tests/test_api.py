@@ -91,6 +91,35 @@ def test_perguntar_blocks_invented_citation(tmp_path):
     assert data["entregues"] == [] and data["bloqueadas"]  # T99 não existe → bloqueada
 
 
+def test_especialistas_lente_por_cima_do_rigor(tmp_path):
+    # captura o system prompt enviado ao modelo para provar que o foco é adendo, não troca
+    vistos = {}
+
+    class Captura(Scripted):
+        def chat(self, messages, tools=None):
+            vistos["system"] = messages[0]["content"]
+            return super().chat(messages, tools)
+
+    idx = LiteratureIndex()
+    idx.add_article(parse_jats(FIXTURE.read_bytes()))
+    agent = ResearchAgent(
+        Captura([search(), final([claim()])]),
+        idx,
+        checker(tmp_path),
+        FixedVerifier(SupportLabel.SUSTENTA),
+    )
+    client = TestClient(create_app(agent, runs_dir=tmp_path / "runs", users={}))
+
+    lista = client.get("/especialistas").json()
+    assert {e["id"] for e in lista} >= {"geral", "celular", "bioquimica", "ecofisiologia"}
+
+    r = client.post("/perguntar", json={"pergunta": "q?", "especialista": "bioquimica"})
+    assert r.status_code == 200
+    # o contrato de rigor continua no system, e o foco entra como adendo
+    assert "buscar_literatura" in vistos["system"] and "Foco de especialista" in vistos["system"]
+    assert "ciclo de Calvin" in vistos["system"]
+
+
 def test_buscar_corpus(tmp_path):
     agent = make_agent(tmp_path, [])
     client = TestClient(create_app(agent, runs_dir=tmp_path / "runs", users={}))

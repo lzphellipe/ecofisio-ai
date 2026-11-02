@@ -10,6 +10,7 @@ import {
 import { baixarMarkdown } from "./exportar";
 import type {
   Artefato,
+  EspecialistaInfo,
   ItemHistorico,
   ModeloInfo,
   Passagem,
@@ -54,6 +55,8 @@ export default function App() {
   const [projetos, setProjetos] = useState<Projeto[]>([]);
   const [modelos, setModelos] = useState<ModeloInfo[]>([]);
   const [modeloSel, setModeloSel] = useState<string>("");
+  const [especialistas, setEspecialistas] = useState<EspecialistaInfo[]>([]);
+  const [especialistaSel, setEspecialistaSel] = useState<string>("geral");
   const [ocupado, setOcupado] = useState(false);
   const [tema, setTema] = useState<Tema>(lerTema);
 
@@ -109,6 +112,31 @@ export default function App() {
     }
   }
 
+  const carregarEspecialistas = useCallback(async () => {
+    try {
+      const es = await api.especialistas();
+      setEspecialistas(es);
+      let salvo = "";
+      try {
+        salvo = localStorage.getItem("ecofisio.especialista") ?? "";
+      } catch {
+        /* ignore */
+      }
+      setEspecialistaSel(es.some((x) => x.id === salvo) ? salvo : "geral");
+    } catch {
+      /* secundário */
+    }
+  }, []);
+
+  function escolherEspecialista(id: string) {
+    setEspecialistaSel(id);
+    try {
+      localStorage.setItem("ecofisio.especialista", id);
+    } catch {
+      /* ignore */
+    }
+  }
+
   useEffect(() => {
     checarSessao();
   }, [checarSessao]);
@@ -117,14 +145,19 @@ export default function App() {
       carregarHistorico();
       carregarProjetos();
       carregarModelos();
+      carregarEspecialistas();
     }
-  }, [sessao, carregarHistorico, carregarProjetos, carregarModelos]);
+  }, [sessao, carregarHistorico, carregarProjetos, carregarModelos, carregarEspecialistas]);
 
   async function perguntar(pergunta: string) {
     setTurnos((t) => [...t, { pergunta }]);
     setOcupado(true);
     try {
-      const resposta = await api.perguntar(pergunta, modeloSel || undefined);
+      const resposta = await api.perguntar(
+        pergunta,
+        modeloSel || undefined,
+        especialistaSel || undefined,
+      );
       setTurnos((t) => t.map((x, i) => (i === t.length - 1 ? { ...x, resposta } : x)));
       carregarHistorico();
     } catch (e) {
@@ -177,6 +210,9 @@ export default function App() {
             modelos={modelos}
             modeloSel={modeloSel}
             aoEscolherModelo={escolherModelo}
+            especialistas={especialistas}
+            especialistaSel={especialistaSel}
+            aoEscolherEspecialista={escolherEspecialista}
           />
         )}
         {secao === "procurar" && <Procurar />}
@@ -279,6 +315,9 @@ function Conversa({
   modelos,
   modeloSel,
   aoEscolherModelo,
+  especialistas,
+  especialistaSel,
+  aoEscolherEspecialista,
 }: {
   turnos: Turno[];
   ocupado: boolean;
@@ -288,6 +327,9 @@ function Conversa({
   modelos: ModeloInfo[];
   modeloSel: string;
   aoEscolherModelo: (id: string) => void;
+  especialistas: EspecialistaInfo[];
+  especialistaSel: string;
+  aoEscolherEspecialista: (id: string) => void;
 }) {
   const fim = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -320,6 +362,9 @@ function Conversa({
         modelos={modelos}
         modeloSel={modeloSel}
         aoEscolherModelo={aoEscolherModelo}
+        especialistas={especialistas}
+        especialistaSel={especialistaSel}
+        aoEscolherEspecialista={aoEscolherEspecialista}
       />
     </div>
   );
@@ -415,12 +460,18 @@ function Composer({
   modelos,
   modeloSel,
   aoEscolherModelo,
+  especialistas,
+  especialistaSel,
+  aoEscolherEspecialista,
 }: {
   ocupado: boolean;
   aoEnviar: (p: string) => void;
   modelos: ModeloInfo[];
   modeloSel: string;
   aoEscolherModelo: (id: string) => void;
+  especialistas: EspecialistaInfo[];
+  especialistaSel: string;
+  aoEscolherEspecialista: (id: string) => void;
 }) {
   const [texto, setTexto] = useState("");
   const area = useRef<HTMLTextAreaElement>(null);
@@ -433,20 +484,40 @@ function Composer({
   }
   return (
     <div className="composer-wrap">
-      {modelos.length > 1 && (
+      {(modelos.length > 1 || especialistas.length > 1) && (
         <div className="modelo-barra">
-          <span className="modelo-rotulo">Modelo</span>
-          <select
-            className="modelo-sel"
-            value={modeloSel}
-            onChange={(e) => aoEscolherModelo(e.target.value)}
-          >
-            {modelos.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-              </option>
-            ))}
-          </select>
+          {especialistas.length > 1 && (
+            <>
+              <span className="modelo-rotulo">Especialista</span>
+              <select
+                className="modelo-sel"
+                value={especialistaSel}
+                onChange={(e) => aoEscolherEspecialista(e.target.value)}
+              >
+                {especialistas.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.label}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+          {modelos.length > 1 && (
+            <>
+              <span className="modelo-rotulo">Modelo</span>
+              <select
+                className="modelo-sel"
+                value={modeloSel}
+                onChange={(e) => aoEscolherModelo(e.target.value)}
+              >
+                {modelos.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
       )}
       <div className="composer">

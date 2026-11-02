@@ -1,5 +1,6 @@
 import type {
   Artefato,
+  EspecialistaInfo,
   ItemHistorico,
   ModeloInfo,
   Passagem,
@@ -78,10 +79,11 @@ async function pedir<T>(caminho: string, init?: RequestInit): Promise<T> {
 export const api = {
   saude: () => pedir<{ status: string; modelo: string; trechos: number }>("/saude"),
   modelos: () => pedir<{ padrao: string; modelos: ModeloInfo[] }>("/modelos"),
-  perguntar: (pergunta: string, modelo?: string) =>
+  especialistas: () => pedir<EspecialistaInfo[]>("/especialistas"),
+  perguntar: (pergunta: string, modelo?: string, especialista?: string) =>
     pedir<Resposta>("/perguntar", {
       method: "POST",
-      body: JSON.stringify({ pergunta, modelo }),
+      body: JSON.stringify({ pergunta, modelo, especialista }),
     }),
   historico: () => pedir<ItemHistorico[]>("/historico"),
   item: (id: string) => pedir<Resposta>(`/historico/${encodeURIComponent(id)}`),

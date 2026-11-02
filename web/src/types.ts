@@ -92,6 +92,11 @@ export interface ModeloInfo {
   modelo: string;
 }
 
+export interface EspecialistaInfo {
+  id: string;
+  label: string;
+}
+
 export interface Artefato {
   id: string;
   pergunta_id: string;

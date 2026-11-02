@@ -153,13 +153,20 @@ class ResearchAgent:
         self.require_semantic = require_semantic
         self.max_steps, self.max_repairs = max_steps, max_repairs
 
-    def ask(self, question: str) -> ResearchAnswer:
+    def ask(self, question: str, *, foco: str = "") -> ResearchAnswer:
         if not question.strip():
             raise ValueError("pergunta vazia")
         registry = PassageRegistry()
         search = SearchTool(self.index, registry)
+        system = SYSTEM_PROMPT
+        if foco.strip():
+            # lente de especialista POR CIMA do contrato; não afrouxa as regras acima
+            system += (
+                "\n\nFoco de especialista para esta resposta (sem afrouxar nenhuma regra acima): "
+                + foco.strip()
+            )
         messages: list[dict[str, Any]] = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system},
             {"role": "user", "content": question},
         ]
         searches: list[str] = []
