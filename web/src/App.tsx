@@ -11,6 +11,7 @@ import { baixarMarkdown } from "./exportar";
 import type {
   Artefato,
   ItemHistorico,
+  ModeloInfo,
   Passagem,
   Projeto,
   ProjetoDetalhe,
@@ -51,6 +52,8 @@ export default function App() {
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [historico, setHistorico] = useState<ItemHistorico[]>([]);
   const [projetos, setProjetos] = useState<Projeto[]>([]);
+  const [modelos, setModelos] = useState<ModeloInfo[]>([]);
+  const [modeloSel, setModeloSel] = useState<string>("");
   const [ocupado, setOcupado] = useState(false);
   const [tema, setTema] = useState<Tema>(lerTema);
 
@@ -81,6 +84,31 @@ export default function App() {
     }
   }, []);
 
+  const carregarModelos = useCallback(async () => {
+    try {
+      const m = await api.modelos();
+      setModelos(m.modelos);
+      let salvo = "";
+      try {
+        salvo = localStorage.getItem("ecofisio.modelo") ?? "";
+      } catch {
+        /* ignore */
+      }
+      setModeloSel(m.modelos.some((x) => x.id === salvo) ? salvo : m.padrao);
+    } catch {
+      /* secundário */
+    }
+  }, []);
+
+  function escolherModelo(id: string) {
+    setModeloSel(id);
+    try {
+      localStorage.setItem("ecofisio.modelo", id);
+    } catch {
+      /* ignore */
+    }
+  }
+
   useEffect(() => {
     checarSessao();
   }, [checarSessao]);
@@ -88,14 +116,15 @@ export default function App() {
     if (sessao === "logado") {
       carregarHistorico();
       carregarProjetos();
+      carregarModelos();
     }
-  }, [sessao, carregarHistorico, carregarProjetos]);
+  }, [sessao, carregarHistorico, carregarProjetos, carregarModelos]);
 
   async function perguntar(pergunta: string) {
     setTurnos((t) => [...t, { pergunta }]);
     setOcupado(true);
     try {
-      const resposta = await api.perguntar(pergunta);
+      const resposta = await api.perguntar(pergunta, modeloSel || undefined);
       setTurnos((t) => t.map((x, i) => (i === t.length - 1 ? { ...x, resposta } : x)));
       carregarHistorico();
     } catch (e) {
@@ -145,6 +174,9 @@ export default function App() {
             aoEnviar={perguntar}
             projetos={projetos}
             aoMudarProjetos={carregarProjetos}
+            modelos={modelos}
+            modeloSel={modeloSel}
+            aoEscolherModelo={escolherModelo}
           />
         )}
         {secao === "procurar" && <Procurar />}
@@ -244,12 +276,18 @@ function Conversa({
   aoEnviar,
   projetos,
   aoMudarProjetos,
+  modelos,
+  modeloSel,
+  aoEscolherModelo,
 }: {
   turnos: Turno[];
   ocupado: boolean;
   aoEnviar: (p: string) => void;
   projetos: Projeto[];
   aoMudarProjetos: () => void;
+  modelos: ModeloInfo[];
+  modeloSel: string;
+  aoEscolherModelo: (id: string) => void;
 }) {
   const fim = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -276,7 +314,13 @@ function Conversa({
         ))}
         <div ref={fim} />
       </div>
-      <Composer ocupado={ocupado} aoEnviar={aoEnviar} />
+      <Composer
+        ocupado={ocupado}
+        aoEnviar={aoEnviar}
+        modelos={modelos}
+        modeloSel={modeloSel}
+        aoEscolherModelo={aoEscolherModelo}
+      />
     </div>
   );
 }
@@ -368,9 +412,15 @@ function Pensando() {
 function Composer({
   ocupado,
   aoEnviar,
+  modelos,
+  modeloSel,
+  aoEscolherModelo,
 }: {
   ocupado: boolean;
   aoEnviar: (p: string) => void;
+  modelos: ModeloInfo[];
+  modeloSel: string;
+  aoEscolherModelo: (id: string) => void;
 }) {
   const [texto, setTexto] = useState("");
   const area = useRef<HTMLTextAreaElement>(null);
@@ -382,28 +432,46 @@ function Composer({
     if (area.current) area.current.style.height = "auto";
   }
   return (
-    <div className="composer">
-      <textarea
-        ref={area}
-        className="composer-area"
-        value={texto}
-        placeholder="Qual é a sua pergunta de pesquisa?"
-        rows={1}
-        onChange={(e) => {
-          setTexto(e.target.value);
-          e.target.style.height = "auto";
-          e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            enviar();
-          }
-        }}
-      />
-      <button className="enviar" onClick={enviar} disabled={ocupado || texto.trim() === ""}>
-        {ocupado ? "Pesquisando" : "Perguntar"}
-      </button>
+    <div className="composer-wrap">
+      {modelos.length > 1 && (
+        <div className="modelo-barra">
+          <span className="modelo-rotulo">Modelo</span>
+          <select
+            className="modelo-sel"
+            value={modeloSel}
+            onChange={(e) => aoEscolherModelo(e.target.value)}
+          >
+            {modelos.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div className="composer">
+        <textarea
+          ref={area}
+          className="composer-area"
+          value={texto}
+          placeholder="Qual é a sua pergunta de pesquisa?"
+          rows={1}
+          onChange={(e) => {
+            setTexto(e.target.value);
+            e.target.style.height = "auto";
+            e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              enviar();
+            }
+          }}
+        />
+        <button className="enviar" onClick={enviar} disabled={ocupado || texto.trim() === ""}>
+          {ocupado ? "Pesquisando" : "Perguntar"}
+        </button>
+      </div>
     </div>
   );
 }

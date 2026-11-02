@@ -36,6 +36,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ecofisio.agent.llm import LLMError, OpenAICompatibleChat
+from ecofisio.agent.providers import provedores
 from ecofisio.agent.research import AgentError, ResearchAgent
 from ecofisio.api.store import AppStore
 from ecofisio.evidence.retraction import CrossrefClient, RetractionChecker, RetractionWatchIndex
@@ -48,8 +49,8 @@ def _truthy(value: str | None) -> bool:
     return value not in (None, "", "0", "false", "False")
 
 
-def build_agent_from_env() -> ResearchAgent:
-    """Monta o agente a partir das variáveis de ambiente (espelha o build_agent do ecofisio-ask)."""
+def build_agentes_from_env() -> dict[str, ResearchAgent]:
+    """Um agente por provedor de modelo ativo (índice/auditor compartilhados). Chave por env."""
     index = LiteratureIndex.load(
         Path(os.environ.get("ECOFISIO_INDEX", "data/processed/literature"))
     )
@@ -69,21 +70,20 @@ def build_agent_from_env() -> ResearchAgent:
         from ecofisio.evidence.verify import NLIVerifier
 
         verifier = NLIVerifier(nli)
-    model = OpenAICompatibleChat(
-        os.environ.get("ECOFISIO_LLM_URL", "http://localhost:8000/v1"),
-        os.environ.get("ECOFISIO_LLM_MODEL", "Qwen/Qwen3-8B"),
-        api_key=os.environ.get("ECOFISIO_LLM_KEY"),
-        extra_body={
-            "chat_template_kwargs": {"enable_thinking": _truthy(os.environ.get("ECOFISIO_PENSAR"))}
-        },
-    )
-    return ResearchAgent(
-        model,
-        index,
-        checker,
-        verifier,
-        require_semantic=not _truthy(os.environ.get("ECOFISIO_SEM_VERIFICACAO")),
-    )
+    require_semantic = not _truthy(os.environ.get("ECOFISIO_SEM_VERIFICACAO"))
+    pensar = _truthy(os.environ.get("ECOFISIO_PENSAR"))
+
+    agentes: dict[str, ResearchAgent] = {}
+    for prov in provedores():
+        # enable_thinking é específico do Qwen no vLLM; não enviar aos endpoints hospedados
+        extra = {"chat_template_kwargs": {"enable_thinking": pensar}} if prov.id == "qwen" else {}
+        model = OpenAICompatibleChat(
+            prov.base_url, prov.model, api_key=prov.api_key, extra_body=extra
+        )
+        agentes[prov.id] = ResearchAgent(
+            model, index, checker, verifier, require_semantic=require_semantic
+        )
+    return agentes
 
 
 def _parse_users(raw: str | None) -> dict[str, str]:
@@ -98,6 +98,7 @@ def _parse_users(raw: str | None) -> dict[str, str]:
 
 class Pergunta(BaseModel):
     pergunta: str = Field(min_length=1, max_length=2000)
+    modelo: str | None = None  # id do provedor (qwen, gemini, openai); padrão: o primeiro
 
 
 class NovoProjeto(BaseModel):
@@ -116,6 +117,7 @@ class NovoArtefato(BaseModel):
 def create_app(
     agent: ResearchAgent | None = None,
     *,
+    agentes: dict[str, ResearchAgent] | None = None,
     runs_dir: Path | None = None,
     store: AppStore | None = None,
     users: dict[str, str] | None = None,
@@ -140,7 +142,12 @@ def create_app(
         allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["*"],
     )
-    app.state.agent = agent or build_agent_from_env()
+    if agentes is None:
+        agentes = {"qwen": agent} if agent is not None else build_agentes_from_env()
+    if not agentes:
+        raise RuntimeError("nenhum provedor de modelo disponível")
+    app.state.agentes = agentes
+    app.state.modelo_padrao = next(iter(agentes))
     loja = store or AppStore(Path(os.environ.get("ECOFISIO_STORE", "data/app")))
 
     def resumo_run(rid: str) -> dict[str, Any] | None:
@@ -174,15 +181,31 @@ def create_app(
             return creds.username
         raise HTTPException(401, "credenciais inválidas", {"WWW-Authenticate": "Basic"})
 
+    def _rotulos() -> dict[str, str]:
+        return {p.id: p.label for p in provedores()}
+
     @app.get("/saude")
     def saude(_: str = Depends(auth)) -> dict[str, Any]:
-        ag: ResearchAgent = app.state.agent
-        return {"status": "ok", "modelo": ag.model.name, "trechos": len(ag.index)}
+        padrao: ResearchAgent = app.state.agentes[app.state.modelo_padrao]
+        return {"status": "ok", "modelo": padrao.model.name, "trechos": len(padrao.index)}
+
+    @app.get("/modelos")
+    def modelos(_: str = Depends(auth)) -> dict[str, Any]:
+        rot = _rotulos()
+        lista = [
+            {"id": mid, "label": rot.get(mid, mid), "modelo": ag.model.name}
+            for mid, ag in app.state.agentes.items()
+        ]
+        return {"padrao": app.state.modelo_padrao, "modelos": lista}
 
     @app.post("/perguntar")
     def perguntar(req: Pergunta, _: str = Depends(auth)) -> dict[str, Any]:
+        mid = req.modelo or app.state.modelo_padrao
+        agente = app.state.agentes.get(mid)
+        if agente is None:
+            raise HTTPException(400, f"modelo desconhecido: {mid}")
         try:
-            answer = app.state.agent.ask(req.pergunta)
+            answer = agente.ask(req.pergunta)
         except (LLMError, AgentError) as exc:
             raise HTTPException(502, f"erro do modelo: {exc}") from exc
         except ValueError as exc:
@@ -233,7 +256,7 @@ def create_app(
         q = q.strip()
         if not q:
             raise HTTPException(400, "consulta vazia")
-        ag: ResearchAgent = app.state.agent
+        ag: ResearchAgent = app.state.agentes[app.state.modelo_padrao]
         k = max(1, min(k, 20))
         mode = "hybrid" if ag.index.embedder else "lexical"
         hits = ag.index.search(q, k=k * 5 if so_primarios else k, mode=mode)

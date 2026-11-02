@@ -86,6 +86,12 @@ export interface ProjetoDetalhe extends Omit<Projeto, "n"> {
   perguntas: ItemHistorico[];
 }
 
+export interface ModeloInfo {
+  id: string;
+  label: string;
+  modelo: string;
+}
+
 export interface Artefato {
   id: string;
   pergunta_id: string;

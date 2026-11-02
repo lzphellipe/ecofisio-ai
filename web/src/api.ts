@@ -1,4 +1,12 @@
-import type { Artefato, ItemHistorico, Passagem, Projeto, ProjetoDetalhe, Resposta } from "./types";
+import type {
+  Artefato,
+  ItemHistorico,
+  ModeloInfo,
+  Passagem,
+  Projeto,
+  ProjetoDetalhe,
+  Resposta,
+} from "./types";
 
 // Sem VITE_API_URL, chama a mesma origem (quando o backend serve o front).
 // No dev (Vite em :5173), defina VITE_API_URL=http://localhost:8080 no .env.
@@ -69,8 +77,12 @@ async function pedir<T>(caminho: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   saude: () => pedir<{ status: string; modelo: string; trechos: number }>("/saude"),
-  perguntar: (pergunta: string) =>
-    pedir<Resposta>("/perguntar", { method: "POST", body: JSON.stringify({ pergunta }) }),
+  modelos: () => pedir<{ padrao: string; modelos: ModeloInfo[] }>("/modelos"),
+  perguntar: (pergunta: string, modelo?: string) =>
+    pedir<Resposta>("/perguntar", {
+      method: "POST",
+      body: JSON.stringify({ pergunta, modelo }),
+    }),
   historico: () => pedir<ItemHistorico[]>("/historico"),
   item: (id: string) => pedir<Resposta>(`/historico/${encodeURIComponent(id)}`),
   buscar: (q: string, soPrimarios: boolean) => {

@@ -110,6 +110,38 @@ def test_health_and_validation(tmp_path):
     assert client.post("/perguntar", json={"pergunta": ""}).status_code == 422  # min_length
 
 
+def test_modelos_lista_e_selecao(tmp_path):
+    idx = LiteratureIndex()
+    idx.add_article(parse_jats(FIXTURE.read_bytes()))
+    ag_a = ResearchAgent(
+        Scripted([search(), final([claim()])]),
+        idx,
+        checker(tmp_path),
+        FixedVerifier(SupportLabel.SUSTENTA),
+    )
+
+    class Outro(Scripted):
+        name = "gemini-fake"
+
+    ag_b = ResearchAgent(
+        Outro([search(), final([claim()])]),
+        idx,
+        checker(tmp_path),
+        FixedVerifier(SupportLabel.SUSTENTA),
+    )
+    app = create_app(agentes={"qwen": ag_a, "gemini": ag_b}, runs_dir=tmp_path / "runs", users={})
+    client = TestClient(app)
+    m = client.get("/modelos").json()
+    assert m["padrao"] == "qwen"
+    assert {x["id"] for x in m["modelos"]} == {"qwen", "gemini"}
+
+    # escolhe o gemini explicitamente
+    r = client.post("/perguntar", json={"pergunta": "q?", "modelo": "gemini"})
+    assert r.status_code == 200 and r.json()["modelo"] == "gemini-fake"
+    # modelo inexistente
+    assert client.post("/perguntar", json={"pergunta": "q?", "modelo": "nao"}).status_code == 400
+
+
 def test_history_item_rejects_path_traversal(tmp_path):
     agent = make_agent(tmp_path, [])
     client = TestClient(create_app(agent, runs_dir=tmp_path / "runs", users={}))

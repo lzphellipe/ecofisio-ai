@@ -23,6 +23,30 @@ do HTTP Port (conta Brev) protege o acesso; o `ECOFISIO_API_USERS` é uma segund
 o histórico por usuário no front. Sem `ECOFISIO_API_USERS` a API fica **sem login** — só use assim
 em rede confiável.
 
+## Escolher o modelo (roteamento entre provedores)
+
+O assistente pode usar vários modelos; o front mostra um seletor quando há mais de um. Cada
+provedor é um endpoint compatível com a API da OpenAI e só aparece quando a **chave dele** está
+definida como variável de ambiente (a chave nunca vai na URL nem no código):
+
+| Provedor | Como ativar | Observação |
+| --- | --- | --- |
+| Qwen local (vLLM) | sempre ativo (`ECOFISIO_LLM_*`) | na sua GPU |
+| Google Gemini | `GEMINI_API_KEY` (chave do Google AI Studio) | tem camada gratuita; modelo em `GEMINI_MODEL` (padrão `gemini-2.0-flash`) |
+| OpenAI | `OPENAI_API_KEY` | API paga; modelo em `OPENAI_MODEL` (padrão `gpt-4o-mini`) |
+
+```bash
+export GEMINI_API_KEY="..."         # ativa o Gemini no seletor
+# export OPENAI_API_KEY="..."       # ativa a OpenAI
+ecofisio-api
+```
+
+`GET /modelos` lista os provedores ativos; `POST /perguntar` aceita `"modelo": "<id>"` (ex.: `gemini`).
+Importante: isso usa a **API** de cada provedor, cobrada por uso com chave própria — **não** a
+assinatura do app de chat (Gemini Advanced, ChatGPT Plus, Claude Pro), que não dá acesso
+programático. O **Claude** (Anthropic) não é compatível com OpenAI e ainda não está incluído;
+precisa de um adaptador próprio.
+
 ## Endpoints
 
 | Método | Rota | O que faz |
