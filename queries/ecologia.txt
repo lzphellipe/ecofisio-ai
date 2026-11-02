@@ -1,0 +1,5 @@
+# Ecologia: populações, comunidades e ecossistemas. Uma query por área.
+(ecology OR "population dynamics" OR "predator-prey" OR "interspecific competition"
+ OR "nutrient cycling" OR ecosystem OR "functional response")
+AND (community OR dynamics OR mechanism)
+AND OPEN_ACCESS:y

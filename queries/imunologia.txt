@@ -1,0 +1,5 @@
+# Imunologia: resposta imune inata e adaptativa. Uma query por área.
+(immunology OR "immune response" OR antibody OR antigen OR "T cell" OR "B cell"
+ OR "innate immunity" OR "adaptive immunity" OR MHC)
+AND (mechanism OR recognition OR regulation)
+AND OPEN_ACCESS:y

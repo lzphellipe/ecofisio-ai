@@ -1,0 +1,6 @@
+# Bioquímica: metabolismo, enzimas e bioenergética. Uma query por área (ver CLAUDE.md).
+# Sintaxe do Europe PMC. Linhas com # são ignoradas; as demais são unidas com espaço.
+(metabolism OR "enzyme kinetics" OR bioenergetics OR "electron transport chain"
+ OR "Calvin cycle" OR "oxidative phosphorylation" OR NADPH)
+AND (mechanism OR regulation OR pathway)
+AND OPEN_ACCESS:y

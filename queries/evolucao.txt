@@ -1,0 +1,5 @@
+# Evolução: seleção, deriva e especiação. Uma query por área.
+("natural selection" OR "genetic drift" OR speciation OR "population genetics"
+ OR adaptation OR phylogenetics)
+AND (evolution OR mechanism OR population)
+AND OPEN_ACCESS:y

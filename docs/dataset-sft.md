@@ -13,11 +13,20 @@ chamar as ferramentas), não fatos. Por isso o portão é severo: ensina-se só 
 A destilação deve usar um índice montado **só com licenças de treino** (CC BY/CC0), para todo
 trecho citado já ser liberado para fine-tuning:
 
+Monte o corpus com **todas as áreas** que as sementes cobrem (uma query por área):
+
 ```bash
-ecofisio-corpus --query-file queries/seca_trocas_gasosas.txt \
+ecofisio-corpus \
+  --query-file queries/bioquimica.txt \
+  --query-file queries/biologia_celular.txt \
   --query-file queries/genetica_expressao.txt \
+  --query-file queries/imunologia.txt \
   --query-file queries/microbiologia.txt \
-  --licenses CC-BY,CC0 --email voce@exemplo.org \
+  --query-file queries/seca_trocas_gasosas.txt \
+  --query-file queries/ecologia.txt \
+  --query-file queries/evolucao.txt \
+  --query-file queries/fisiologia_animal.txt \
+  --licenses CC-BY,CC0 --max 150 --email voce@exemplo.org \
   --out data/processed/literature-treino
 ```
 

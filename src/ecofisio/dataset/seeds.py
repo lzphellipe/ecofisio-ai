@@ -25,77 +25,105 @@ class SeedQuestion:
     nivel: str = ""  # "basico" | "graduacao" | "pos"
 
 
+def _f(pergunta: str, area: str, nivel: str) -> SeedQuestion:
+    return SeedQuestion(pergunta, "factual", area, nivel)
+
+
+def _s(pergunta: str, area: str = "", nivel: str = "") -> SeedQuestion:
+    return SeedQuestion(pergunta, "sem_resposta", area, nivel)
+
+
 # Perguntas destiladas, espalhadas por área e por nível. Em inglês o corpus rende mais, mas a
-# pergunta ao assistente é em português (o agente traduz para a busca).
+# pergunta ao assistente é em português (o agente traduz para a busca). Cada área aqui tem uma
+# query correspondente em queries/, para o corpus cobrir o que as sementes perguntam.
 FACTUAL_SEEDS: list[SeedQuestion] = [
-    SeedQuestion(
-        "O que é a fosforilação oxidativa e onde ocorre na célula?",
-        "factual",
-        "bioquimica",
+    # bioquímica
+    _f("O que é a fosforilação oxidativa e onde ocorre na célula?", "bioquimica", "basico"),
+    _f("Como a enzima Rubisco participa da fixação de carbono?", "bioquimica", "graduacao"),
+    _f("Como o ciclo de Calvin fixa o carbono na fotossíntese?", "bioquimica", "graduacao"),
+    _f("Como a cadeia transportadora de elétrons gera ATP?", "bioquimica", "graduacao"),
+    _f("O que são enzimas alostéricas e como sua atividade é regulada?", "bioquimica", "pos"),
+    _f("Qual o papel do NADPH no metabolismo vegetal?", "bioquimica", "pos"),
+    # biologia celular
+    _f("Qual o papel dos telômeros na senescência celular?", "biologia_celular", "pos"),
+    _f("Como funcionam os checkpoints do ciclo celular?", "biologia_celular", "graduacao"),
+    _f(
+        "Qual a função do retículo endoplasmático na síntese de proteínas?",
+        "biologia_celular",
         "basico",
     ),
-    SeedQuestion(
-        "Como a enzima Rubisco participa da fixação de carbono?",
-        "factual",
-        "bioquimica",
-        "graduacao",
-    ),
-    SeedQuestion(
-        "Qual o papel dos telômeros na senescência celular?", "factual", "biologia_celular", "pos"
-    ),
-    SeedQuestion(
-        "Como funciona o splicing alternativo e por que ele amplia o proteoma?",
-        "factual",
-        "genetica",
-        "pos",
-    ),
-    SeedQuestion(
-        "O que determina a especificidade entre anticorpo e antígeno?",
-        "factual",
-        "imunologia",
-        "graduacao",
-    ),
-    SeedQuestion(
+    _f("Como a apoptose é regulada na célula?", "biologia_celular", "pos"),
+    # genética
+    _f("Como funciona o splicing alternativo e por que ele amplia o proteoma?", "genetica", "pos"),
+    _f("O que é metilação do DNA e como ela regula a expressão gênica?", "genetica", "graduacao"),
+    _f("Como a estrutura da cromatina influencia a transcrição?", "genetica", "pos"),
+    # imunologia
+    _f("O que determina a especificidade entre anticorpo e antígeno?", "imunologia", "graduacao"),
+    _f("Qual a diferença entre imunidade inata e adaptativa?", "imunologia", "basico"),
+    _f("Como as células T reconhecem antígenos apresentados pelo MHC?", "imunologia", "pos"),
+    # microbiologia
+    _f(
         "Como bactérias adquirem resistência a antibióticos por transferência horizontal?",
-        "factual",
         "microbiologia",
         "pos",
     ),
-    SeedQuestion(
+    _f("Como se forma e se mantém um biofilme bacteriano?", "microbiologia", "graduacao"),
+    _f(
+        "O que é quorum sensing e como coordena o comportamento bacteriano?", "microbiologia", "pos"
+    ),
+    # fisiologia vegetal
+    _f(
         "Como o déficit hídrico afeta a condutância estomática nas plantas?",
-        "factual",
         "fisiologia_vegetal",
         "graduacao",
     ),
-    SeedQuestion(
+    _f("Como o ácido abscísico regula o fechamento estomático?", "fisiologia_vegetal", "pos"),
+    _f("Como plantas C4 concentram CO2 e qual a vantagem sob calor?", "fisiologia_vegetal", "pos"),
+    _f(
+        "O que acontece com as trocas gasosas após a reidratação pós-seca?",
+        "fisiologia_vegetal",
+        "graduacao",
+    ),
+    # ecologia
+    _f(
         "O que a curva de resposta funcional de um predador descreve em ecologia?",
-        "factual",
         "ecologia",
         "pos",
     ),
-    SeedQuestion(
+    _f("Como a competição interespecífica molda comunidades?", "ecologia", "graduacao"),
+    _f("Como ocorre a ciclagem de nutrientes em um ecossistema?", "ecologia", "basico"),
+    # evolução
+    _f(
         "Como a seleção natural atua sobre a variação genética de uma população?",
-        "factual",
         "evolucao",
         "basico",
     ),
-    SeedQuestion(
+    _f("O que é deriva genética e quando ela domina sobre a seleção?", "evolucao", "pos"),
+    _f("Como ocorre a especiação alopátrica?", "evolucao", "graduacao"),
+    # fisiologia animal/humana
+    _f(
         "Qual a função do sistema renina-angiotensina na regulação da pressão arterial?",
-        "factual",
         "fisiologia_animal",
         "pos",
     ),
+    _f(
+        "Como o néfron regula o equilíbrio hídrico e eletrolítico?",
+        "fisiologia_animal",
+        "graduacao",
+    ),
+    _f("O que é homeostase e por quais mecanismos é mantida?", "fisiologia_animal", "basico"),
 ]
 
 # Fora do escopo do corpus: o alvo é abster-se (nada forte entregue, lacuna registrada).
 OUT_OF_SCOPE_SEEDS: list[SeedQuestion] = [
-    SeedQuestion(
+    _s(
         "Qual a dose recomendada de um fertilizante NPK para uma lavoura específica?",
-        "sem_resposta",
         "fisiologia_vegetal",
         "graduacao",
     ),
-    SeedQuestion("Qual a cotação atual de uma commodity agrícola?", "sem_resposta", "", ""),
+    _s("Qual a cotação atual de uma commodity agrícola?"),
+    _s("Como configurar um servidor web nginx com HTTPS?"),
+    _s("Qual o melhor investimento em renda fixa hoje?"),
 ]
 
 

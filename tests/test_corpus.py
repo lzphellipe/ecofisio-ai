@@ -168,6 +168,31 @@ def test_cli_merges_several_query_files_into_one_index(tmp_path, monkeypatch, ca
     assert "seca:" in printed and "baunilha:" in printed
 
 
+def test_todas_as_queries_do_repo_sao_validas():
+    from ecofisio.literature.corpus import read_query_file
+
+    pasta = Path(__file__).parents[1] / "queries"
+    arquivos = sorted(pasta.glob("*.txt"))
+    assert len(arquivos) >= 8  # uma query por área de cobertura
+    for f in arquivos:
+        q = read_query_file(f)
+        assert q.strip() and "OPEN_ACCESS:y" in q, f
+
+
+def test_sementes_cobrem_as_areas_das_queries():
+    # cada área das sementes factuais deve ter um arquivo de query correspondente
+    from ecofisio.dataset.seeds import FACTUAL_SEEDS
+
+    pasta = Path(__file__).parents[1] / "queries"
+    areas = {s.area for s in FACTUAL_SEEDS}
+    # mapeamento área -> arquivo (fisiologia_vegetal usa seca_trocas_gasosas)
+    aliases = {"fisiologia_vegetal": "seca_trocas_gasosas", "genetica": "genetica_expressao"}
+    for area in areas:
+        nome = aliases.get(area, area)
+        assert (pasta / f"{nome}.txt").is_file(), f"falta query para a área {area}"
+    assert len(FACTUAL_SEEDS) >= 25  # ampliado para um dataset treinável
+
+
 def test_repo_vanilla_query_requires_plant_context():
     from ecofisio.literature.corpus import read_query_file
 

@@ -1,0 +1,5 @@
+# Biologia celular: organelas, ciclo celular e sinalização. Uma query por área.
+("cell cycle" OR apoptosis OR telomere OR "endoplasmic reticulum" OR mitochondria
+ OR "cell signaling" OR organelle)
+AND (mechanism OR regulation OR function)
+AND OPEN_ACCESS:y

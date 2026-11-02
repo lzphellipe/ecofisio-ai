@@ -1,0 +1,5 @@
+# Fisiologia animal e humana: sistemas e homeostase. Uma query por área.
+("animal physiology" OR "human physiology" OR homeostasis OR nephron OR "blood pressure"
+ OR "renin-angiotensin" OR "endocrine regulation")
+AND (mechanism OR regulation OR system)
+AND OPEN_ACCESS:y
