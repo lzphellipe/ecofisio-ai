@@ -22,7 +22,7 @@ from ecofisio.agent.llm import LLMError
 from ecofisio.agent.research import AgentError
 from ecofisio.dataset.distill import example_from_answer, manifest, split_train_val
 from ecofisio.dataset.schema import SFTExample, dumps_jsonl
-from ecofisio.dataset.seeds import REFUSAL_EXAMPLES, all_seeds
+from ecofisio.dataset.seeds import OUT_OF_SCOPE_SEEDS, REFUSAL_EXAMPLES, all_seeds
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -35,11 +35,32 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="não inclui os exemplos de recusa de uso duplo (padrão: inclui)",
     )
+    ap.add_argument(
+        "--auto-sementes",
+        type=int,
+        default=0,
+        help="gera N perguntas a partir do corpus (self-instruct) em vez das sementes fixas",
+    )
+    ap.add_argument(
+        "--so-primarios",
+        action="store_true",
+        help="com --auto-sementes: gera só de trechos de pesquisa primária",
+    )
     ap.add_argument("--limite", type=int, default=None, help="usa só as N primeiras sementes")
     args = ap.parse_args(argv)
 
-    agent, model, _ = build_agent(args, ap)
-    seeds = all_seeds()[: args.limite] if args.limite else all_seeds()
+    agent, model, index = build_agent(args, ap)
+    if args.auto_sementes:
+        from ecofisio.dataset.autoseeds import gerar_sementes
+
+        print(f"gerando {args.auto_sementes} sementes a partir do corpus...")
+        auto = gerar_sementes(index, model, args.auto_sementes, so_primarios=args.so_primarios)
+        print(f"  {len(auto)} perguntas geradas")
+        seeds = [*auto, *OUT_OF_SCOPE_SEEDS]  # mantém abstenção; recusas entram depois
+    else:
+        seeds = all_seeds()
+    if args.limite:
+        seeds = seeds[: args.limite]
     kept: list[SFTExample] = []
     discarded: list[dict] = []
     try:

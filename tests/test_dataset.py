@@ -125,6 +125,35 @@ def test_abstention_is_kept_and_strong_answer_is_not(tmp_path, index):
 
 
 # ---- recusas escritas à mão -------------------------------------------------------------------
+def test_autoseeds_limpa_e_gera_do_corpus():
+    from ecofisio.dataset.autoseeds import _limpar, gerar_sementes
+
+    assert _limpar('  "Como a Rubisco fixa carbono?"  ') == "Como a Rubisco fixa carbono?"
+    assert _limpar("1. Qual o papel do néfron?") == "Qual o papel do néfron?"
+    assert _limpar("isso não é uma pergunta") == ""  # sem '?'
+    assert _limpar("") == ""
+
+    idx = LiteratureIndex()
+    idx.add_article(parse_jats(FIXTURE.read_bytes()))  # research-article (pesquisa primária)
+
+    class Gerador:
+        name = "g"
+
+        def __init__(self):
+            self.i = 0
+
+        def chat(self, messages, tools=None):
+            self.i += 1
+            return ChatReply(content=f"Pergunta {self.i} sobre o tema?")
+
+        def close(self):
+            pass
+
+    sementes = gerar_sementes(idx, Gerador(), 2, so_primarios=True)
+    assert 1 <= len(sementes) <= 2
+    assert all(s.tipo == "factual" and s.pergunta.endswith("?") for s in sementes)
+
+
 def test_refusal_examples_are_clean(tmp_path):
     assert REFUSAL_EXAMPLES
     for ex in REFUSAL_EXAMPLES:

@@ -53,6 +53,24 @@ Saída em `data/sft/`:
 Enquanto não houver um modelo NLI escolhido, `--sem-verificacao-semantica` deixa as afirmações
 entrarem com aviso; com um verificador (`--nli-model`), o portão fica mais rigoroso.
 
+## Escalar o dataset: sementes a partir do corpus (`--auto-sementes`)
+
+As sementes escritas à mão são poucas e muitas caem no portão por falta de cobertura. Para um
+dataset de verdade, gere as perguntas **a partir do próprio corpus** (self-instruct ancorado): para
+cada trecho indexado, o modelo formula uma pergunta que aquele trecho responde — então a busca na
+destilação reencontra a base e quase nada é descartado.
+
+```powershell
+ecofisio-dataset --auto-sementes 300 --so-primarios `
+  --index data/processed/literature-treino `
+  --crossref-email voce@exemplo.org --sem-verificacao-semantica --out data/sft
+```
+
+Isso faz N chamadas de geração + a destilação de cada uma (mais pesado — reserve tempo e deixe o
+vLLM no ar). As perguntas geradas ainda passam pelo mesmo portão (buscar, citar, auditar); a
+geração só garante que existe base no corpus. Para render ainda mais, amplie antes o corpus
+(`--max` maior e mais `--query-file`).
+
 ## Baixar o resultado para o seu PC (automatizado)
 
 A VM não empurra arquivos para o seu PC, então o download roda do seu lado, num comando só.
