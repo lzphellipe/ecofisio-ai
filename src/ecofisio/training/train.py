@@ -58,28 +58,47 @@ def treinar(cfg: TrainConfig, exemplos: list[dict[str, Any]]) -> str:
 
     ds = Dataset.from_list([{"messages": e["messages"]} for e in exemplos])
 
-    args = SFTConfig(
-        output_dir=cfg.saida,
-        num_train_epochs=cfg.epocas,
-        per_device_train_batch_size=cfg.batch,
-        gradient_accumulation_steps=cfg.acumulo,
-        learning_rate=cfg.lr,
-        warmup_ratio=cfg.warmup,
-        max_length=cfg.max_tokens,
-        bf16=True,
-        logging_steps=5,
-        save_strategy="epoch",
-        seed=cfg.seed,
-        report_to=[],
-    )
+    # Resiliente a versão do TRL: passa só os argumentos que o SFTConfig instalado aceita.
+    # (versões diferentes renomeiam/removem campos, ex.: max_seq_length -> max_length.)
+    desejado = {
+        "output_dir": cfg.saida,
+        "num_train_epochs": cfg.epocas,
+        "per_device_train_batch_size": cfg.batch,
+        "gradient_accumulation_steps": cfg.acumulo,
+        "learning_rate": cfg.lr,
+        "warmup_ratio": cfg.warmup,
+        "max_length": cfg.max_tokens,  # TRL recente
+        "max_seq_length": cfg.max_tokens,  # TRL antigo
+        "bf16": True,
+        "logging_steps": 5,
+        "save_strategy": "epoch",
+        "seed": cfg.seed,
+        "report_to": [],
+    }
+    try:
+        from dataclasses import fields as _fields
 
-    trainer = SFTTrainer(
-        model=model,
-        args=args,
-        train_dataset=ds,
-        peft_config=lora,
-        processing_class=tok,
-    )
+        aceitos = {f.name for f in _fields(SFTConfig)}
+    except TypeError:
+        import inspect
+
+        aceitos = set(inspect.signature(SFTConfig).parameters)
+    args = SFTConfig(**{k: v for k, v in desejado.items() if k in aceitos})
+
+    # processing_class (TRL recente) ou tokenizer (TRL antigo)
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "args": args,
+        "train_dataset": ds,
+        "peft_config": lora,
+    }
+    import inspect as _inspect
+
+    if "processing_class" in _inspect.signature(SFTTrainer).parameters:
+        kwargs["processing_class"] = tok
+    else:
+        kwargs["tokenizer"] = tok
+    trainer = SFTTrainer(**kwargs)
     trainer.train()
     Path(cfg.saida).mkdir(parents=True, exist_ok=True)
     trainer.save_model(cfg.saida)
