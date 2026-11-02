@@ -44,6 +44,22 @@ Saída em `data/sft/`:
 Enquanto não houver um modelo NLI escolhido, `--sem-verificacao-semantica` deixa as afirmações
 entrarem com aviso; com um verificador (`--nli-model`), o portão fica mais rigoroso.
 
+## Baixar o resultado para o seu PC (automatizado)
+
+A VM não empurra arquivos para o seu PC, então o download roda do seu lado, num comando só.
+No **WSL/PC** (onde o `brev` está logado), da pasta do repositório:
+
+```bash
+# baixa dataset + rastros das perguntas + projetos/artefatos (+ saídas de treino, quando houver)
+bash scripts/baixar_dados.sh                 # da instância eco-bio-vllm, para ./ecofisio-dados
+
+# ou: gera o dataset na VM e já baixa (o vLLM precisa estar no ar)
+GERAR=1 LLM_KEY=<chave-do-vllm> bash scripts/baixar_dados.sh
+```
+
+Se o nome da instância não resolver no ssh, passe o host explícito (painel do Brev → TCP/UDP
+Ports, porta 22): `SSH_HOST=global.prd.ga.run.brev.nvidia.com SSH_PORT=<porta> bash scripts/baixar_dados.sh`.
+
 ## Próximo passo
 
 Com o dataset em mãos, o treino em si (QLoRA sobre o Qwen 3, numa GPU L40S/A100 do Brev) é a fase
