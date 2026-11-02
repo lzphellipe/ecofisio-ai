@@ -1,0 +1,11 @@
+# Fim de linha canônico = LF em todas as plataformas. Evita que scripts .sh
+# quebrem com CRLF quando o repo é clonado/editado no Windows (/mnt/c no WSL).
+* text=auto eol=lf
+
+# binários nunca normalizados
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.xml -text
