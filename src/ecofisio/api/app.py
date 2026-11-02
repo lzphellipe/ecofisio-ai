@@ -32,6 +32,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ecofisio.agent.llm import LLMError, OpenAICompatibleChat
@@ -119,6 +120,7 @@ def create_app(
     store: AppStore | None = None,
     users: dict[str, str] | None = None,
     cors_origins: list[str] | None = None,
+    front_dir: Path | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="ecofisio-ai",
@@ -303,6 +305,12 @@ def create_app(
         if not loja.excluir_artefato(aid):
             raise HTTPException(404, "artefato não encontrado")
         return {"ok": True}
+
+    # Serve o front compilado (web/dist), se existir: tudo num endereço só.
+    # Montado por último, para as rotas da API acima terem prioridade.
+    front = front_dir or Path(os.environ.get("ECOFISIO_FRONT", "web/dist"))
+    if (front / "index.html").is_file():
+        app.mount("/", StaticFiles(directory=front, html=True), name="front")
 
     return app
 

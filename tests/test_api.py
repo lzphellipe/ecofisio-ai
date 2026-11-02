@@ -172,6 +172,21 @@ def test_login_required_when_users_set(tmp_path):
     assert client.get("/saude", auth=("luiz", "s3nha")).status_code == 200
 
 
+def test_serve_front_quando_existe(tmp_path):
+    front = tmp_path / "dist"
+    (front / "assets").mkdir(parents=True)
+    (front / "index.html").write_text("<!doctype html><title>ecofísio</title>", "utf-8")
+    (front / "assets" / "app.js").write_text("console.log('ok')", "utf-8")
+    agent = make_agent(tmp_path, [])
+    client = TestClient(create_app(agent, runs_dir=tmp_path / "runs", users={}, front_dir=front))
+    # a API continua respondendo (rotas têm prioridade sobre o mount em "/")
+    assert client.get("/saude").json()["status"] == "ok"
+    # e o front é servido na raiz e nos assets
+    raiz = client.get("/")
+    assert raiz.status_code == 200 and "ecofísio" in raiz.text
+    assert client.get("/assets/app.js").status_code == 200
+
+
 def test_cors_origin_allowed(tmp_path):
     agent = make_agent(tmp_path, [])
     app = create_app(

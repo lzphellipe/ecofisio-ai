@@ -1,6 +1,8 @@
 import type { Artefato, ItemHistorico, Passagem, Projeto, ProjetoDetalhe, Resposta } from "./types";
 
-const BASE = (import.meta.env.VITE_API_URL ?? "http://localhost:8080").replace(/\/$/, "");
+// Sem VITE_API_URL, chama a mesma origem (quando o backend serve o front).
+// No dev (Vite em :5173), defina VITE_API_URL=http://localhost:8080 no .env.
+const BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 const AUTH_KEY = "ecofisio.auth";
 
 // Credencial HTTP Basic guardada localmente (conveniência por navegador; a API é que valida).
