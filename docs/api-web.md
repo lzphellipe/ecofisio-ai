@@ -34,18 +34,29 @@ definida como variável de ambiente (a chave nunca vai na URL nem no código):
 | Qwen local (vLLM) | sempre ativo (`ECOFISIO_LLM_*`) | na sua GPU |
 | Google Gemini | `GEMINI_API_KEY` (chave do Google AI Studio) | tem camada gratuita; modelo em `GEMINI_MODEL` (padrão `gemini-2.0-flash`) |
 | OpenAI | `OPENAI_API_KEY` | API paga; modelo em `OPENAI_MODEL` (padrão `gpt-4o-mini`) |
+| Anthropic Claude | `ANTHROPIC_API_KEY` | API paga; modelo em `ANTHROPIC_MODEL` (padrão `claude-sonnet-5-5`) |
 
 ```bash
 export GEMINI_API_KEY="..."         # ativa o Gemini no seletor
 # export OPENAI_API_KEY="..."       # ativa a OpenAI
+# export ANTHROPIC_API_KEY="..."    # ativa o Claude
 ecofisio-api
 ```
 
-`GET /modelos` lista os provedores ativos; `POST /perguntar` aceita `"modelo": "<id>"` (ex.: `gemini`).
-Importante: isso usa a **API** de cada provedor, cobrada por uso com chave própria — **não** a
-assinatura do app de chat (Gemini Advanced, ChatGPT Plus, Claude Pro), que não dá acesso
-programático. O **Claude** (Anthropic) não é compatível com OpenAI e ainda não está incluído;
-precisa de um adaptador próprio.
+`GET /modelos` lista os provedores ativos; `POST /perguntar` aceita `"modelo": "<id>"` (ex.: `gemini`,
+`claude`). Importante: isso usa a **API** de cada provedor, cobrada por uso com chave própria —
+**não** a assinatura do app de chat (Gemini Advanced, ChatGPT Plus, Claude Pro), que não dá acesso
+programático. O **Claude** não é compatível com a API da OpenAI: ele entra por um adaptador próprio
+(`AnthropicChat`, formato Messages) que traduz histórico e ferramentas nos dois sentidos.
+
+### Camada gratuita × paga (realidade por provedor)
+
+- **Google** é o único com **API gratuita** de verdade (Google AI Studio, com limites de uso). O
+  **Gemini Enterprise** que a universidade assina costuma ser o **app** do Gemini no Workspace —
+  isso **não** é a mesma coisa que acesso programático. API da organização se dá pelo **Vertex AI**
+  (projeto do Google Cloud da universidade, com autenticação própria), não por uma chave do AI
+  Studio. Confirme com a TI se há Vertex AI habilitado antes de contar com ele.
+- **Anthropic** e **OpenAI** não têm camada gratuita de API — só paga, por uso.
 
 ## Endpoints
 

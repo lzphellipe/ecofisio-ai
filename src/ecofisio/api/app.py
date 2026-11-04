@@ -35,6 +35,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from ecofisio.agent.anthropic_chat import AnthropicChat
 from ecofisio.agent.especialistas import especialistas, foco_de
 from ecofisio.agent.llm import LLMError, OpenAICompatibleChat
 from ecofisio.agent.providers import provedores
@@ -76,11 +77,16 @@ def build_agentes_from_env() -> dict[str, ResearchAgent]:
 
     agentes: dict[str, ResearchAgent] = {}
     for prov in provedores():
-        # enable_thinking é específico do Qwen no vLLM; não enviar aos endpoints hospedados
-        extra = {"chat_template_kwargs": {"enable_thinking": pensar}} if prov.id == "qwen" else {}
-        model = OpenAICompatibleChat(
-            prov.base_url, prov.model, api_key=prov.api_key, extra_body=extra
-        )
+        if prov.kind == "anthropic":
+            model = AnthropicChat(prov.base_url, prov.model, api_key=prov.api_key)
+        else:
+            # enable_thinking é específico do Qwen no vLLM; não enviar aos endpoints hospedados
+            extra = (
+                {"chat_template_kwargs": {"enable_thinking": pensar}} if prov.id == "qwen" else {}
+            )
+            model = OpenAICompatibleChat(
+                prov.base_url, prov.model, api_key=prov.api_key, extra_body=extra
+            )
         agentes[prov.id] = ResearchAgent(
             model, index, checker, verifier, require_semantic=require_semantic
         )

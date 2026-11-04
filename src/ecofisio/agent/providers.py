@@ -7,8 +7,10 @@ serve a todos trocando base_url/model/chave:
 - gemini: Google Gemini pelo endpoint compatível com OpenAI (chave do Google AI Studio; tem
   camada gratuita). Ativa só se GEMINI_API_KEY estiver definido.
 - openai: API da OpenAI (paga). Ativa só se OPENAI_API_KEY estiver definido.
+- claude: API da Anthropic (paga). Não é compatível com OpenAI — usa o AnthropicChat (kind
+  "anthropic"). Ativa só se ANTHROPIC_API_KEY estiver definido.
 
-Claude (Anthropic) não é compatível com OpenAI e precisa de um adaptador próprio — fica para depois.
+O campo `kind` diz qual cliente instanciar ("openai" para os compatíveis; "anthropic" p/ o Claude).
 A chave de cada provedor vem de variável de ambiente; nunca da linha de comando nem do código.
 """
 
@@ -25,6 +27,7 @@ class Provedor:
     base_url: str
     model: str
     api_key_env: str
+    kind: str = "openai"  # "openai" (compatível) ou "anthropic"
 
     @property
     def api_key(self) -> str | None:
@@ -63,6 +66,17 @@ def provedores() -> list[Provedor]:
                 base_url=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
                 model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
                 api_key_env="OPENAI_API_KEY",
+            )
+        )
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        lista.append(
+            Provedor(
+                id="claude",
+                label="Anthropic Claude",
+                base_url=os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
+                model=os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5-5"),
+                api_key_env="ANTHROPIC_API_KEY",
+                kind="anthropic",
             )
         )
     return lista
