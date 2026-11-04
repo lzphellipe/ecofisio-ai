@@ -32,8 +32,8 @@ definida como variável de ambiente (a chave nunca vai na URL nem no código):
 | Provedor | Como ativar | Observação |
 | --- | --- | --- |
 | Qwen local (vLLM) | sempre ativo (`ECOFISIO_LLM_*`) | na sua GPU |
-| Google Gemini Flash | `GEMINI_API_KEY` (chave do Google AI Studio) | econômico; modelo em `GEMINI_MODEL` (padrão `gemini-2.0-flash`) |
-| Google Gemini Pro | `GEMINI_API_KEY` (a mesma chave) | mais forte; modelo em `GEMINI_MODEL_PRO` (padrão `gemini-2.5-pro`; `""` desativa) |
+| Google Gemini Flash | `GEMINI_API_KEY` (chave do Google AI Studio) | econômico; modelo em `GEMINI_MODEL` (padrão `gemini-3.8-flash`) |
+| Google Gemini Pro | `GEMINI_API_KEY` (a mesma chave) | mais forte; modelo em `GEMINI_MODEL_PRO` (padrão `gemini-4-argon`; `""` desativa) |
 | OpenAI | `OPENAI_API_KEY` | API paga; modelo em `OPENAI_MODEL` (padrão `gpt-4o-mini`) |
 | Anthropic Claude | `ANTHROPIC_API_KEY` | API paga; modelo em `ANTHROPIC_MODEL` (padrão `claude-sonnet-5-5`) |
 

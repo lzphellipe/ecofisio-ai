@@ -57,11 +57,11 @@ def provedores() -> list[Provedor]:
                 id="gemini",
                 label="Google Gemini Flash (econômico)",
                 base_url=base_gemini,
-                model=os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
+                model=os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
                 api_key_env="GEMINI_API_KEY",
             )
         )
-        pro = os.environ.get("GEMINI_MODEL_PRO", "gemini-2.5-pro")
+        pro = os.environ.get("GEMINI_MODEL_PRO", "gemini-4-argon")
         if pro:  # GEMINI_MODEL_PRO="" desativa a entrada Pro
             lista.append(
                 Provedor(

@@ -24,8 +24,8 @@ def test_gemini_oferece_flash_e_pro_com_a_mesma_chave(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "k")
     provs = {p.id: p for p in provedores()}
     assert "gemini" in provs and "gemini-pro" in provs
-    assert provs["gemini"].model == "gemini-2.0-flash"
-    assert provs["gemini-pro"].model == "gemini-2.5-pro"
+    assert provs["gemini"].model == "gemini-3.8-flash"
+    assert provs["gemini-pro"].model == "gemini-4-argon"
     # mesma chave e mesmo endpoint para as duas (gratuito x pago = billing no Google)
     assert provs["gemini"].api_key == provs["gemini-pro"].api_key == "k"
     assert provs["gemini"].base_url == provs["gemini-pro"].base_url
