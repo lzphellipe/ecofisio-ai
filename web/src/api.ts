@@ -59,7 +59,12 @@ async function pedir<T>(caminho: string, init?: RequestInit): Promise<T> {
   if (cred) headers.Authorization = `Basic ${cred}`;
   let resp: Response;
   try {
-    resp = await fetch(`${BASE}${caminho}`, { ...init, headers: { ...headers, ...init?.headers } });
+    // credentials:"include" leva o cookie de sessão do login Google (mesma origem ou CORS c/ credenciais)
+    resp = await fetch(`${BASE}${caminho}`, {
+      ...init,
+      credentials: "include",
+      headers: { ...headers, ...init?.headers },
+    });
   } catch {
     throw new RespostaDeErro(0, "Não consegui falar com a API. O servidor está no ar?");
   }
@@ -76,7 +81,20 @@ async function pedir<T>(caminho: string, init?: RequestInit): Promise<T> {
   return (await resp.json()) as T;
 }
 
+export interface SessaoInfo {
+  autenticado: boolean;
+  usuario: { email: string; nome: string } | null;
+  login_google: boolean;
+}
+
+// URL de início do fluxo OAuth (redireciona para o Google e volta no callback).
+export function urlLoginGoogle(): string {
+  return `${BASE}/auth/google/login`;
+}
+
 export const api = {
+  eu: () => pedir<SessaoInfo>("/auth/me"),
+  sair: () => pedir<{ ok: boolean }>("/auth/logout", { method: "POST" }),
   saude: () => pedir<{ status: string; modelo: string; trechos: number }>("/saude"),
   modelos: () => pedir<{ padrao: string; modelos: ModeloInfo[] }>("/modelos"),
   especialistas: () => pedir<EspecialistaInfo[]>("/especialistas"),

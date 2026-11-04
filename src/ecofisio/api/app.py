@@ -17,6 +17,9 @@ Configuração por variáveis de ambiente (as mesmas do ecofisio-ask, mais as da
     ECOFISIO_API_USERS      "user1:senha1,user2:senha2" (vazio = sem login; só em rede confiável)
     ECOFISIO_API_CORS       origens permitidas, separadas por vírgula (padrão http://localhost:5173)
     ECOFISIO_API_HOST/PORT  (padrão 0.0.0.0:8080)
+    GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET   liga o "Entrar com Google" (opcional)
+    GOOGLE_OAUTH_REDIRECT   URL de callback (padrão http://localhost:8080/auth/google/callback)
+    ECOFISIO_SESSION_SECRET segredo para assinar o cookie de sessão (fixe um valor aleatório)
 """
 
 from __future__ import annotations
@@ -29,8 +32,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -40,11 +44,14 @@ from ecofisio.agent.especialistas import especialistas, foco_de
 from ecofisio.agent.llm import LLMError, OpenAICompatibleChat
 from ecofisio.agent.providers import provedores
 from ecofisio.agent.research import AgentError, ResearchAgent
+from ecofisio.api.google_auth import GoogleOAuth, OAuthError
 from ecofisio.api.store import AppStore
 from ecofisio.evidence.retraction import CrossrefClient, RetractionChecker, RetractionWatchIndex
 from ecofisio.rag.index import LiteratureIndex
 
 _RUN_ID = re.compile(r"^[0-9A-Za-z_-]+$")  # evita travessia de caminho em /historico/{id}
+_COOKIE_SESSAO = "eco_sessao"
+_COOKIE_STATE = "eco_oauth_state"
 
 
 def _truthy(value: str | None) -> bool:
@@ -131,6 +138,7 @@ def create_app(
     users: dict[str, str] | None = None,
     cors_origins: list[str] | None = None,
     front_dir: Path | None = None,
+    oauth: GoogleOAuth | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="ecofisio-ai",
@@ -157,6 +165,8 @@ def create_app(
     app.state.agentes = agentes
     app.state.modelo_padrao = next(iter(agentes))
     loja = store or AppStore(Path(os.environ.get("ECOFISIO_STORE", "data/app")))
+    oauth = oauth if oauth is not None else GoogleOAuth.from_env()
+    app.state.oauth = oauth
 
     def resumo_run(rid: str) -> dict[str, Any] | None:
         """Item de histórico (id, pergunta, resumo, contagens) a partir do rastro, ou None."""
@@ -178,19 +188,87 @@ def create_app(
 
     security = HTTPBasic(auto_error=False)
 
-    def auth(creds: HTTPBasicCredentials | None = Depends(security)) -> str:
-        if not users:  # sem login configurado: libera (use só em rede confiável)
+    def auth(request: Request, creds: HTTPBasicCredentials | None = Depends(security)) -> str:
+        # 1) sessão Google (cookie assinado) tem prioridade quando o login está configurado
+        if oauth is not None:
+            sessao = oauth.ler_sessao(request.cookies.get(_COOKIE_SESSAO))
+            if sessao:
+                return str(sessao.get("email") or sessao.get("sub") or "google")
+        # 2) Basic auth (fallback para dev/local ou quando não há login Google)
+        if users and creds and creds.username in users:
+            if secrets.compare_digest(users[creds.username], creds.password):
+                return creds.username
+        # 3) sem nenhum login configurado: libera (use só em rede confiável)
+        if not users and oauth is None:
             return "anon"
-        if (
-            creds
-            and creds.username in users
-            and secrets.compare_digest(users[creds.username], creds.password)
-        ):
-            return creds.username
-        raise HTTPException(401, "credenciais inválidas", {"WWW-Authenticate": "Basic"})
+        raise HTTPException(401, "não autenticado", {"WWW-Authenticate": "Basic"})
 
     def _rotulos() -> dict[str, str]:
         return {p.id: p.label for p in provedores()}
+
+    # ---- login com Google (OAuth2) --------------------------------------------------------
+    @app.get("/auth/me")
+    def auth_me(request: Request) -> dict[str, Any]:
+        """Quem está logado (ou não), e se o login Google está disponível no servidor."""
+        login_google = oauth is not None
+        if oauth is not None:
+            sessao = oauth.ler_sessao(request.cookies.get(_COOKIE_SESSAO))
+            if sessao:
+                return {
+                    "autenticado": True,
+                    "usuario": {"email": sessao.get("email"), "nome": sessao.get("nome")},
+                    "login_google": True,
+                }
+        # Basic auth não deixa o front saber "quem" sem desafiar; só reportamos o estado do Google
+        return {"autenticado": False, "usuario": None, "login_google": login_google}
+
+    @app.get("/auth/google/login")
+    def auth_google_login() -> RedirectResponse:
+        if oauth is None:
+            raise HTTPException(503, "login com Google não configurado no servidor")
+        state = secrets.token_urlsafe(24)
+        resp = RedirectResponse(oauth.authorization_url(state), status_code=302)
+        # guarda o state num cookie curto para conferir no callback (proteção CSRF)
+        resp.set_cookie(
+            _COOKIE_STATE, state, max_age=600, httponly=True, samesite="lax", path="/auth"
+        )
+        return resp
+
+    @app.get("/auth/google/callback")
+    def auth_google_callback(
+        request: Request, code: str | None = None, state: str | None = None
+    ) -> RedirectResponse:
+        if oauth is None:
+            raise HTTPException(503, "login com Google não configurado no servidor")
+        esperado = request.cookies.get(_COOKIE_STATE)
+        if not code or not state or not esperado or not secrets.compare_digest(state, esperado):
+            raise HTTPException(400, "state inválido ou code ausente no callback do Google")
+        try:
+            claims = oauth.exchange_code(code)
+        except OAuthError as exc:
+            raise HTTPException(502, f"falha no login com Google: {exc}") from exc
+        email = str(claims.get("email") or "")
+        if not email or not claims.get("email_verified", True):
+            raise HTTPException(403, "conta Google sem e-mail verificado")
+        token = oauth.emitir_sessao(
+            email=email, nome=str(claims.get("name") or email), sub=str(claims.get("sub") or "")
+        )
+        resp = RedirectResponse("/", status_code=302)
+        resp.set_cookie(
+            _COOKIE_SESSAO,
+            token,
+            max_age=oauth.session_horas * 3600,
+            httponly=True,
+            samesite="lax",
+            path="/",
+        )
+        resp.delete_cookie(_COOKIE_STATE, path="/auth")
+        return resp
+
+    @app.post("/auth/logout")
+    def auth_logout(response: Response) -> dict[str, bool]:
+        response.delete_cookie(_COOKIE_SESSAO, path="/")
+        return {"ok": True}
 
     @app.get("/saude")
     def saude(_: str = Depends(auth)) -> dict[str, Any]:

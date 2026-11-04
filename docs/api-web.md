@@ -66,6 +66,10 @@ programático. O **Claude** não é compatível com a API da OpenAI: ele entra p
 | POST | `/perguntar` | corpo `{"pergunta": "..."}` → resposta auditada (resumo, entregues, bloqueadas, lacunas, buscas) + `id` |
 | GET | `/historico?limite=50` | perguntas anteriores (id, pergunta, resumo, contagens) |
 | GET | `/historico/{id}` | rastro completo de uma pergunta |
+| GET | `/auth/me` | quem está logado e se o login Google está disponível no servidor |
+| GET | `/auth/google/login` | inicia o OAuth (redireciona para o Google) |
+| GET | `/auth/google/callback` | retorno do Google: emite o cookie de sessão e manda para `/` |
+| POST | `/auth/logout` | limpa o cookie de sessão |
 
 Cada pergunta é gravada em `runs/*.json` (o disco da VM persiste entre liga/desliga), então o
 histórico sobrevive às sessões sem precisar de banco.
@@ -92,6 +96,43 @@ API (`/perguntar`, `/buscar`, `/projetos`…) têm prioridade. Exponha só a por
 Port do Brev e pronto.
 
 > Build precisa de Node na VM. Se ela não tiver, instale (`curl -fsSL https://deb.nodesource.com/setup_22.x | sudo bash - && sudo apt-get install -y nodejs`) ou compile no seu PC e copie `web/dist` para a VM.
+
+## Login com Google (OAuth2)
+
+O "Entrar com Google" diz **quem** é o usuário (identidade do app) — **não** dá acesso a nenhuma
+LLM. As chaves dos provedores continuam sendo configuração do servidor. É opcional e *config-gated*:
+sem `GOOGLE_OAUTH_CLIENT_ID`, o login fica desligado e o app segue no Basic auth (`ECOFISIO_API_USERS`).
+Qualquer conta Google pode entrar (sem restrição de domínio — decisão do projeto).
+
+**Como o fluxo funciona:** o front chama `GET /auth/me` para saber se o login Google está ligado e
+mostra o botão; o botão vai para `/auth/google/login`, que redireciona ao Google; o Google volta em
+`/auth/google/callback`, o servidor troca o `code` por tokens, lê o e-mail/nome do `id_token` e emite
+um **cookie de sessão assinado por HMAC** (`eco_sessao`, `httponly`, validade em `ECOFISIO_SESSION_HORAS`,
+padrão 12h). A cada requisição, a API valida esse cookie (ou o Basic auth, como alternativa).
+
+**O que VOCÊ precisa criar** (uma vez, no Google Cloud Console):
+
+1. Crie/escolha um projeto em [console.cloud.google.com](https://console.cloud.google.com).
+2. *APIs & Services → OAuth consent screen*: tipo **External**, preencha nome do app e e-mail de
+   suporte. Enquanto estiver em "Testing", adicione os e-mails de teste (ex.: o seu e o da Thaysa);
+   para liberar a qualquer conta, publique o app.
+3. *APIs & Services → Credentials → Create credentials → OAuth client ID*: tipo **Web application**.
+   Em **Authorized redirect URIs**, coloque a URL de callback exatamente como o app vai expô-la, ex.:
+   `http://localhost:8080/auth/google/callback` (dev) e a URL pública do Brev/servidor em produção.
+4. Copie o **Client ID** e o **Client secret**.
+
+**Como ligar no servidor** (nunca no código nem na URL — só variáveis de ambiente):
+
+```bash
+export GOOGLE_OAUTH_CLIENT_ID="...apps.googleusercontent.com"
+export GOOGLE_OAUTH_CLIENT_SECRET="..."
+export GOOGLE_OAUTH_REDIRECT="http://localhost:8080/auth/google/callback"  # = o redirect URI cadastrado
+export ECOFISIO_SESSION_SECRET="$(python -c 'import secrets;print(secrets.token_urlsafe(32))')"  # fixe este valor
+ecofisio-api
+```
+
+Se o `ECOFISIO_SESSION_SECRET` mudar a cada boot, as sessões abertas são invalidadas (o usuário só
+reloga). Em produção, sirva por **HTTPS** para o cookie viajar com segurança.
 
 ## Durante o desenvolvimento do front
 

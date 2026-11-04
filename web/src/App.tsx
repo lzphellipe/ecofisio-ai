@@ -6,6 +6,7 @@ import {
   RespostaDeErro,
   salvarCredencial,
   temCredencial,
+  urlLoginGoogle,
 } from "./api";
 import { baixarMarkdown } from "./exportar";
 import type {
@@ -229,8 +230,13 @@ export default function App() {
           <Config
             tema={tema}
             setTema={setTema}
-            aoSair={() => {
+            aoSair={async () => {
               limparCredencial();
+              try {
+                await api.sair(); // limpa o cookie de sessão do Google, se houver
+              } catch {
+                /* ignore */
+              }
               setSessao("deslogado");
             }}
           />
@@ -848,8 +854,13 @@ function Config({
   aoSair: () => void;
 }) {
   const [status, setStatus] = useState<{ modelo: string; trechos: number } | null>(null);
+  const [eu, setEu] = useState<{ email: string; nome: string } | null>(null);
   useEffect(() => {
     api.saude().then(setStatus).catch(() => setStatus(null));
+    api
+      .eu()
+      .then((s) => setEu(s.usuario))
+      .catch(() => setEu(null));
   }, []);
   const temas: { v: Tema; r: string }[] = [
     { v: "auto", r: "Automático (segue o sistema)" },
@@ -894,8 +905,15 @@ function Config({
 
         <section className="bloco">
           <h3 className="bloco-titulo">Conta</h3>
+          {eu && (
+            <p className="conta-usuario">
+              Conectada como <strong>{eu.nome}</strong>
+              <br />
+              <span className="mono">{eu.email}</span>
+            </p>
+          )}
           <button className="sair-btn" onClick={aoSair}>
-            {temCredencial() ? "Sair" : "Esquecer esta sessão"}
+            {eu || temCredencial() ? "Sair" : "Esquecer esta sessão"}
           </button>
         </section>
       </div>
@@ -909,6 +927,16 @@ function Login({ aoEntrar }: { aoEntrar: () => void }) {
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState("");
   const [tentando, setTentando] = useState(false);
+  const [googleOn, setGoogleOn] = useState(false);
+
+  // descobre se o servidor tem o "Entrar com Google" ligado
+  useEffect(() => {
+    api
+      .eu()
+      .then((s) => setGoogleOn(s.login_google))
+      .catch(() => setGoogleOn(false));
+  }, []);
+
   async function entrar(e: React.FormEvent) {
     e.preventDefault();
     setTentando(true);
@@ -926,25 +954,61 @@ function Login({ aoEntrar }: { aoEntrar: () => void }) {
   }
   return (
     <div className="login">
-      <form className="login-cartao" onSubmit={entrar}>
+      <div className="login-cartao">
         <div className="marca login-marca">
           <Marca />
           <div className="marca-nome">ecofísio</div>
         </div>
-        <label>
-          Usuário
-          <input value={usuario} onChange={(e) => setUsuario(e.target.value)} autoFocus />
-        </label>
-        <label>
-          Senha
-          <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} />
-        </label>
-        {erro && <p className="login-erro">{erro}</p>}
-        <button type="submit" disabled={tentando}>
-          {tentando ? "Entrando" : "Entrar"}
-        </button>
-      </form>
+        {googleOn && (
+          <>
+            <a className="google-btn" href={urlLoginGoogle()}>
+              <GoogleG />
+              Entrar com Google
+            </a>
+            <div className="login-ou">
+              <span>ou com usuário e senha</span>
+            </div>
+          </>
+        )}
+        <form onSubmit={entrar}>
+          <label>
+            Usuário
+            <input value={usuario} onChange={(e) => setUsuario(e.target.value)} />
+          </label>
+          <label>
+            Senha
+            <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} />
+          </label>
+          {erro && <p className="login-erro">{erro}</p>}
+          <button type="submit" disabled={tentando}>
+            {tentando ? "Entrando" : "Entrar"}
+          </button>
+        </form>
+      </div>
     </div>
+  );
+}
+
+function GoogleG() {
+  return (
+    <svg className="google-g" viewBox="0 0 18 18" aria-hidden="true" width="18" height="18">
+      <path
+        fill="#4285F4"
+        d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62Z"
+      />
+      <path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.34 0-4.33-1.58-5.04-3.71H.96v2.33A9 9 0 0 0 9 18Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M3.96 10.71A5.41 5.41 0 0 1 3.68 9c0-.59.1-1.17.28-1.71V4.96H.96A9 9 0 0 0 0 9c0 1.45.35 2.82.96 4.04l3-2.33Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.47.89 11.43 0 9 0A9 9 0 0 0 .96 4.96l3 2.33C4.67 5.16 6.66 3.58 9 3.58Z"
+      />
+    </svg>
   );
 }
 
