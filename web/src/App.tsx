@@ -64,12 +64,29 @@ export default function App() {
   useEffect(() => aplicarTema(tema), [tema]);
 
   const checarSessao = useCallback(async () => {
+    // A tela de login é sempre o ponto de entrada: só passa quem tem uma sessão de fato.
+    // 1) sessão Google ativa (cookie válido)?
     try {
-      await api.saude();
-      setSessao("logado");
-    } catch (e) {
-      setSessao(e instanceof RespostaDeErro && e.status === 401 ? "deslogado" : "logado");
+      const s = await api.eu();
+      if (s.autenticado) {
+        setSessao("logado");
+        return;
+      }
+    } catch {
+      /* segue para o Basic */
     }
+    // 2) credencial Basic salva que o servidor aceita?
+    if (temCredencial()) {
+      try {
+        await api.saude();
+        setSessao("logado");
+        return;
+      } catch {
+        limparCredencial();
+      }
+    }
+    // 3) nada: mostra o login e bloqueia as demais rotas
+    setSessao("deslogado");
   }, []);
 
   const carregarHistorico = useCallback(async () => {
@@ -962,17 +979,22 @@ function Login({ aoEntrar }: { aoEntrar: () => void }) {
         <p className="login-sub">
           Assistente de pesquisa em biologia com citação verificável.
         </p>
-        {googleOn && (
-          <>
-            <a className="google-btn" href={urlLoginGoogle()}>
-              <GoogleG />
-              Continuar com o Google
-            </a>
-            <div className="login-ou">
-              <span>ou com usuário e senha</span>
-            </div>
-          </>
-        )}
+        <a
+          className="google-btn"
+          href={urlLoginGoogle()}
+          onClick={(e) => {
+            if (!googleOn) {
+              e.preventDefault();
+              setErro("O login com Google ainda não está configurado neste servidor.");
+            }
+          }}
+        >
+          <GoogleG />
+          Continuar com o Google
+        </a>
+        <div className="login-ou">
+          <span>ou com usuário e senha</span>
+        </div>
         <form onSubmit={entrar}>
           <label>
             Usuário
