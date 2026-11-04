@@ -959,11 +959,14 @@ function Login({ aoEntrar }: { aoEntrar: () => void }) {
           <Marca />
           <div className="marca-nome">ecofísio</div>
         </div>
+        <p className="login-sub">
+          Assistente de pesquisa em biologia com citação verificável.
+        </p>
         {googleOn && (
           <>
             <a className="google-btn" href={urlLoginGoogle()}>
               <GoogleG />
-              Entrar com Google
+              Continuar com o Google
             </a>
             <div className="login-ou">
               <span>ou com usuário e senha</span>
