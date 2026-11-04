@@ -46,18 +46,32 @@ def provedores() -> list[Provedor]:
         )
     ]
     if os.environ.get("GEMINI_API_KEY"):
+        base_gemini = os.environ.get(
+            "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/"
+        )
+        # Mesma chave/endpoint do Google AI Studio para as duas: "gratuito x pago" é só o
+        # faturamento (billing) do projeto no Google, não config diferente aqui. O que se escolhe
+        # é o modelo — um mais leve (econômico) e um mais forte.
         lista.append(
             Provedor(
                 id="gemini",
-                label="Google Gemini",
-                base_url=os.environ.get(
-                    "GEMINI_BASE_URL",
-                    "https://generativelanguage.googleapis.com/v1beta/openai/",
-                ),
+                label="Google Gemini Flash (econômico)",
+                base_url=base_gemini,
                 model=os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
                 api_key_env="GEMINI_API_KEY",
             )
         )
+        pro = os.environ.get("GEMINI_MODEL_PRO", "gemini-2.5-pro")
+        if pro:  # GEMINI_MODEL_PRO="" desativa a entrada Pro
+            lista.append(
+                Provedor(
+                    id="gemini-pro",
+                    label="Google Gemini Pro (mais forte)",
+                    base_url=base_gemini,
+                    model=pro,
+                    api_key_env="GEMINI_API_KEY",
+                )
+            )
     if os.environ.get("OPENAI_API_KEY"):
         lista.append(
             Provedor(

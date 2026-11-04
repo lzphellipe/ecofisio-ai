@@ -32,7 +32,8 @@ definida como variável de ambiente (a chave nunca vai na URL nem no código):
 | Provedor | Como ativar | Observação |
 | --- | --- | --- |
 | Qwen local (vLLM) | sempre ativo (`ECOFISIO_LLM_*`) | na sua GPU |
-| Google Gemini | `GEMINI_API_KEY` (chave do Google AI Studio) | tem camada gratuita; modelo em `GEMINI_MODEL` (padrão `gemini-2.0-flash`) |
+| Google Gemini Flash | `GEMINI_API_KEY` (chave do Google AI Studio) | econômico; modelo em `GEMINI_MODEL` (padrão `gemini-2.0-flash`) |
+| Google Gemini Pro | `GEMINI_API_KEY` (a mesma chave) | mais forte; modelo em `GEMINI_MODEL_PRO` (padrão `gemini-2.5-pro`; `""` desativa) |
 | OpenAI | `OPENAI_API_KEY` | API paga; modelo em `OPENAI_MODEL` (padrão `gpt-4o-mini`) |
 | Anthropic Claude | `ANTHROPIC_API_KEY` | API paga; modelo em `ANTHROPIC_MODEL` (padrão `claude-sonnet-5-5`) |
 
@@ -51,7 +52,10 @@ programático. O **Claude** não é compatível com a API da OpenAI: ele entra p
 
 ### Camada gratuita × paga (realidade por provedor)
 
-- **Google** é o único com **API gratuita** de verdade (Google AI Studio, com limites de uso). O
+- **Google** é o único com **API gratuita** de verdade (Google AI Studio, com limites de uso).
+  Gratuito × pago é a **mesma chave/endpoint**: muda só o **faturamento (billing)** do projeto no
+  Google (sobe limites e altera os termos de uso dos dados), não a config aqui. As entradas Flash e
+  Pro no seletor usam a mesma `GEMINI_API_KEY` — a diferença é o **modelo**. O
   **Gemini Enterprise** que a universidade assina costuma ser o **app** do Gemini no Workspace —
   isso **não** é a mesma coisa que acesso programático. API da organização se dá pelo **Vertex AI**
   (projeto do Google Cloud da universidade, com autenticação própria), não por uma chave do AI
